@@ -647,7 +647,7 @@ function generatePDF() {
         rows.push([`P${String(i).padStart(2,'0')}`,...TAB2_FIELDS.map(f=>data.tab2[tratPDF][i][f.key]!==''?data.tab2[tratPDF][i][f.key]:'—')]);
       }
 
-      // Calcular médias por campo
+      // Calcular médias por campo (ignora células vazias)
       const medias = TAB2_FIELDS.map(f => {
         const vals = [];
         for(let i=1;i<=N_PLANTAS;i++){
@@ -657,7 +657,8 @@ function generatePDF() {
         return vals.length > 0 ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2) : '—';
       });
 
-      const mediaRow = ['MÉDIA', ...medias];
+      // Linha de média incluída na mesma tabela
+      rows.push(['MÉDIA', ...medias]);
 
       doc.autoTable({
         head:[['Planta',...TAB2_FIELDS.map(f=>f.label)]],
@@ -669,22 +670,15 @@ function generatePDF() {
         alternateRowStyles:{ fillColor:[245,250,247] },
         margin:{ left:14, right:14 },
         rowPageBreak:'auto',
-        didDrawPage: function(hookData) {
-          // rodapé da última página com a linha de média
+        willDrawCell: function(hookData) {
+          // Estiliza a última linha (MÉDIA) com fundo verde
+          if (hookData.row.index === rows.length - 1) {
+            hookData.cell.styles.fillColor = [216,243,220];
+            hookData.cell.styles.textColor = [29,106,74];
+            hookData.cell.styles.fontStyle = 'bold';
+            hookData.cell.styles.fontSize  = 8;
+          }
         },
-      });
-
-      // Linha de média — adicionada após a tabela
-      doc.autoTable({
-        head:[],
-        body:[ mediaRow ],
-        startY: doc.lastAutoTable.finalY,
-        theme:'grid',
-        bodyStyles:{ halign:'center', fontSize:8, fontStyle:'bold', fillColor:[216,243,220], textColor:[29,106,74] },
-        columnStyles:{ 0:{ halign:'left' } },
-        margin:{ left:14, right:14 },
-        tableLineColor: GD,
-        tableLineWidth: 0.3,
       });
 
       // Numeração
