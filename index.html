@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verdivo — Avaliações de Campo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --verde: #2d6a4f;
+    --verde-light: #52b788;
+    --verde-pale: #d8f3dc;
+    --bg: #f4f1eb;
+    --bg2: #ede8df;
+    --white: #ffffff;
+    --dark: #1a2e22;
+    --gray: #6b7280;
+    --border: #c8c0b0;
+    --red: #c0392b;
+    --input-bg: #fefefe;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg);
+    color: var(--dark);
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--dark);
+    padding: 0 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    border-bottom: 3px solid var(--verde-light);
+  }
+  .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.3rem; color: var(--verde-pale); }
+  .logo span { color: var(--verde-light); }
+  .status-label { font-size: 0.65rem; color: var(--verde-light); letter-spacing: 1px; text-transform: uppercase; display: flex; align-items: center; gap: 0.4rem; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--verde-light); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  .tabs-nav { background: var(--bg2); border-bottom: 2px solid var(--border); padding: 0 1rem; display: flex; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab-btn { font-family: 'Syne', sans-serif; font-weight: 600; font-size: 0.75rem; letter-spacing: 0.5px; text-transform: uppercase; padding: 0.85rem 1.1rem; border: none; background: transparent; color: var(--gray); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.2s; white-space: nowrap; }
+  .tab-btn:hover { color: var(--verde); }
+  .tab-btn.active { color: var(--verde); border-bottom-color: var(--verde); background: var(--white); }
+
+  .tab-content { display: none; padding: 1.25rem; }
+  .tab-content.active { display: block; }
+
+  .section-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem; }
+  .section-title { font-family: 'Syne', sans-serif; font-size: 1.25rem; font-weight: 800; color: var(--dark); }
+  .section-subtitle { font-size: 0.7rem; color: var(--gray); margin-top: 0.2rem; }
+
+  /* TRATAMENTO SELECTOR BOX */
+  .trat-selector-box {
+    background: var(--white);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .trat-selector-label {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--dark);
+    white-space: nowrap;
+  }
+  .trat-select {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--dark);
+    background: var(--bg);
+    border: 2px solid var(--verde-light);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    flex: 1;
+    min-width: 120px;
+    max-width: 200px;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%232d6a4f' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2rem;
+  }
+  .trat-select:focus { outline: none; border-color: var(--verde); }
+
+  .trat-badge {
+    background: var(--verde-pale);
+    color: var(--verde);
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 99px;
+    border: 1.5px solid var(--verde-light);
+  }
+
+  .trat-progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-left: auto;
+  }
+  .trat-progress-bar { width: 100px; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .trat-progress-fill { height: 100%; background: var(--verde-light); border-radius: 99px; transition: width 0.3s; }
+  .trat-progress-lbl { font-size: 0.68rem; color: var(--gray); white-space: nowrap; }
+
+  /* TABLE */
+  .table-wrapper { background: var(--white); border-radius: 10px; border: 1px solid var(--border); overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+  .table-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); background: var(--bg2); flex-wrap: wrap; gap: 0.5rem; }
+  .table-label { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--dark); }
+  .progress-bar-wrap { display: flex; align-items: center; gap: 0.6rem; }
+  .progress-bar { width: 100px; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: var(--verde-light); border-radius: 99px; transition: width 0.3s; }
+  .progress-label { font-size: 0.68rem; color: var(--gray); min-width: 55px; }
+  .scroll-hint { font-size: 0.65rem; color: var(--gray); text-align: center; padding: 0.3rem; background: #faf8f4; border-bottom: 1px solid var(--border); display: none; }
+  @media (max-width: 599px) { .scroll-hint { display: block; } }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  .data-table { width: 100%; min-width: 480px; border-collapse: collapse; font-size: 0.78rem; }
+  .data-table thead th { background: var(--dark); color: var(--verde-pale); font-family: 'Syne', sans-serif; font-weight: 600; font-size: 0.68rem; letter-spacing: 0.3px; text-transform: uppercase; padding: 0.65rem 0.5rem; text-align: center; white-space: nowrap; }
+  .data-table thead th:first-child { text-align: left; padding-left: 0.85rem; }
+  .data-table tbody tr:nth-child(even) { background: var(--bg); }
+  .data-table tbody tr:hover { background: var(--verde-pale); }
+  .data-table tbody td { padding: 0.38rem 0.4rem; border-bottom: 1px solid var(--border); text-align: center; vertical-align: middle; }
+  .data-table tbody td:first-child { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.78rem; color: var(--verde); text-align: left; padding-left: 0.85rem; white-space: nowrap; }
+
+  .data-table input[type="number"] { width: 100%; min-width: 64px; padding: 0.38rem 0.3rem; border: 1.5px solid var(--border); border-radius: 5px; background: var(--input-bg); font-family: 'DM Mono', monospace; font-size: 0.78rem; color: var(--dark); text-align: center; transition: border-color 0.15s; -moz-appearance: textfield; height: 38px; }
+  .data-table input::-webkit-outer-spin-button, .data-table input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .data-table input:focus { outline: none; border-color: var(--verde-light); background: #f0faf4; }
+  .data-table input.filled { border-color: var(--verde-light); background: #edfaf2; }
+
+  /* PMG CORRIGIDO — coluna calculada */
+  .pmg-calc {
+    background: var(--verde-pale);
+    border-radius: 5px;
+    padding: 0.4rem 0.5rem;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.82rem;
+    color: var(--verde);
+    min-width: 70px;
+    display: inline-block;
+    text-align: center;
+  }
+  .pmg-calc.empty { color: var(--border); font-weight: 400; font-family: 'DM Mono', monospace; }
+  .data-table thead th.th-calc {
+    background: #1e4a34;
+    color: var(--verde-light);
+  }
+
+  .btn { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.4px; text-transform: uppercase; padding: 0.55rem 1rem; border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.4rem; }
+  .btn-danger { background: transparent; color: var(--red); border: 1.5px solid var(--red); }
+  .btn-danger:hover { background: var(--red); color: white; }
+
+  .stats-bar { display: flex; gap: 0.75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+  .stat-chip { background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 0.45rem 0.85rem; font-size: 0.7rem; }
+  .stat-chip strong { font-family: 'Syne', sans-serif; font-size: 1rem; display: block; color: var(--verde); }
+
+  /* PDF SECTION */
+  .pdf-section {
+    background: var(--dark);
+    border-radius: 10px;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+  .pdf-info .pdf-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1rem; color: var(--verde-pale); }
+  .pdf-info .pdf-sub { font-size: 0.7rem; color: #9ca3af; margin-top: 0.2rem; }
+
+  .pdf-trat-select {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--dark);
+    background: var(--verde-pale);
+    border: 2px solid var(--verde-light);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%232d6a4f' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2rem;
+    min-width: 130px;
+  }
+  .pdf-trat-select:focus { outline: none; }
+
+  .btn-pdf { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 0.85rem; letter-spacing: 0.4px; text-transform: uppercase; padding: 0.8rem 1.75rem; border-radius: 8px; border: none; cursor: pointer; background: var(--verde-light); color: var(--dark); transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; }
+  .btn-pdf:hover { background: var(--verde-pale); transform: translateY(-1px); }
+  .btn-pdf:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+  .pdf-controls { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+  .pdf-select-label { font-size: 0.7rem; color: #9ca3af; }
+
+  .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--dark); color: var(--verde-pale); padding: 0.65rem 1.1rem; border-radius: 8px; font-size: 0.78rem; border-left: 4px solid var(--verde-light); opacity: 0; transform: translateY(8px); transition: all 0.25s; z-index: 999; pointer-events: none; max-width: calc(100vw - 3rem); }
+  .toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Verdivo<span>.</span></div>
+  <div class="status-label"><div class="status-dot"></div>Offline</div>
+</header>
+
+<nav class="tabs-nav">
+  <button class="tab-btn active" onclick="switchTab('tab1')">📋 Aba 1 — Colheita</button>
+  <button class="tab-btn" onclick="switchTab('tab2')">📏 Aba 2 — Morfologia</button>
+</nav>
+
+<!-- TAB 1 -->
+<div id="tab1" class="tab-content active">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Avaliação de Colheita</div>
+      <div class="section-subtitle">N° espigas viável · Peso 10 espigas (g) · PMG (g) · Umidade inicial</div>
+    </div>
+    <button class="btn btn-danger" onclick="clearTab1()">🗑 Limpar tudo</button>
+  </div>
+  <div class="stats-bar" id="stats1"></div>
+  <div class="table-wrapper">
+    <div class="table-toolbar">
+      <span class="table-label">Tratamentos T1 – T6</span>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar"><div class="progress-bar-fill" id="prog1" style="width:0%"></div></div>
+        <span class="progress-label" id="prog1-lbl">0 / 24</span>
+      </div>
+    </div>
+    <div class="scroll-hint">← deslize para ver todos os campos →</div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Tratamento</th>
+            <th>N° Espigas Viável</th>
+            <th>Peso 10 Espigas (g)</th>
+            <th>PMG (g)</th>
+            <th>Umidade Inicial (%)</th>
+            <th class="th-calc">PMG Corrigido 14% (g)</th>
+          </tr>
+        </thead>
+        <tbody id="tbody1"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 2 -->
+<div id="tab2" class="tab-content">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Avaliação Morfológica</div>
+      <div class="section-subtitle">Comp. espiga · N° Fileiras · Esp. colmo · Alt. inserção</div>
+    </div>
+    <button class="btn btn-danger" onclick="clearTab2()">🗑 Limpar tratamento</button>
+  </div>
+
+  <!-- SELETOR DE TRATAMENTO -->
+  <div class="trat-selector-box">
+    <span class="trat-selector-label">Tratamento em avaliação:</span>
+    <select class="trat-select" id="trat2-select" onchange="onTrat2Change()">
+      <option value="T1">T1</option>
+      <option value="T2">T2</option>
+      <option value="T3">T3</option>
+      <option value="T4">T4</option>
+      <option value="T5">T5</option>
+      <option value="T6">T6</option>
+    </select>
+    <span class="trat-badge" id="trat2-badge">T1</span>
+    <div class="trat-progress-wrap">
+      <div class="trat-progress-bar"><div class="trat-progress-fill" id="trat-prog-fill" style="width:0%"></div></div>
+      <span class="trat-progress-lbl" id="trat-prog-lbl">0 / 200</span>
+    </div>
+  </div>
+
+  <div class="stats-bar" id="stats2"></div>
+
+  <div class="table-wrapper">
+    <div class="table-toolbar">
+      <span class="table-label" id="tab2-label">50 Plantas — T1</span>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar"><div class="progress-bar-fill" id="prog2" style="width:0%"></div></div>
+        <span class="progress-label" id="prog2-lbl">0 / 200</span>
+      </div>
+    </div>
+    <div class="scroll-hint">← deslize para ver todos os campos →</div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Planta</th>
+            <th>Comp. Espiga (cm)</th>
+            <th>N° Fileiras</th>
+            <th>Esp. Colmo (mm)</th>
+            <th>Alt. Inserção (cm)</th>
+          </tr>
+        </thead>
+        <tbody id="tbody2"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- PDF -->
+<div style="padding:0 1.25rem 3rem">
+  <div class="pdf-section">
+    <div class="pdf-info">
+      <div class="pdf-title">📄 Exportar Relatório por Tratamento</div>
+      <div class="pdf-sub">Gera PDF com Aba 1 completa + Aba 2 do tratamento selecionado</div>
+    </div>
+    <div class="pdf-controls">
+      <div>
+        <div class="pdf-select-label">Selecione o tratamento:</div>
+        <select class="pdf-trat-select" id="pdf-trat-select">
+          <option value="T1">T1</option>
+          <option value="T2">T2</option>
+          <option value="T3">T3</option>
+          <option value="T4">T4</option>
+          <option value="T5">T5</option>
+          <option value="T6">T6</option>
+        </select>
+      </div>
+      <button class="btn-pdf" id="pdfBtn" onclick="generatePDF()">⬇ Baixar PDF</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const TRATAMENTOS = ['T1','T2','T3','T4','T5','T6'];
+const N_PLANTAS   = 50;
+
+const TAB1_FIELDS = [
+  { key:'espigas', label:'N° Espigas Viável' },
+  { key:'peso10',  label:'Peso 10 Espigas (g)' },
+  { key:'pmg',     label:'PMG (g)' },
+  { key:'umidade', label:'Umidade Inicial (%)' },
+];
+
+const TAB2_FIELDS = [
+  { key:'comp_espiga', label:'Comp. Espiga (cm)' },
+  { key:'n_fileiras',  label:'N° Fileiras' },
+  { key:'esp_colmo',   label:'Esp. Colmo (mm)' },
+  { key:'alt_insercao',label:'Alt. Inserção (cm)' },
+];
+
+function freshData() {
+  const d = { tab1:{}, tab2:{} };
+  TRATAMENTOS.forEach(t => {
+    d.tab1[t] = {};
+    TAB1_FIELDS.forEach(f => d.tab1[t][f.key] = '');
+    d.tab2[t] = {};
+    for (let i = 1; i <= N_PLANTAS; i++) {
+      d.tab2[t][i] = {};
+      TAB2_FIELDS.forEach(f => d.tab2[t][i][f.key] = '');
+    }
+  });
+  return d;
+}
+
+function loadData() {
+  try { const r = localStorage.getItem('verdivo_v2'); if (r) return JSON.parse(r); } catch(e) {}
+  return freshData();
+}
+
+let data = loadData();
+let currentTrat2 = 'T1';
+
+function save() {
+  try { localStorage.setItem('verdivo_v2', JSON.stringify(data)); } catch(e) {}
+}
+
+// ── TAB 1 ──
+function renderTab1() {
+  const tbody = document.getElementById('tbody1');
+  tbody.innerHTML = '';
+  TRATAMENTOS.forEach(t => {
+    const tr = document.createElement('tr');
+    let html = `<td>${t}</td>`;
+    TAB1_FIELDS.forEach(f => {
+      const val = data.tab1[t][f.key];
+      html += `<td><input type="number" step="any" inputmode="decimal"
+        class="${val!==''?'filled':''}" value="${val}"
+        data-trat="${t}" data-field="${f.key}"
+        oninput="onTab1Change(this)" placeholder="—"></td>`;
+    });
+    // PMG corrigido calculado
+    html += `<td><span class="pmg-calc empty" id="pmgcalc-${t}">—</span></td>`;
+    tr.innerHTML = html;
+    tbody.appendChild(tr);
+  });
+  // Recalcula todos após render
+  TRATAMENTOS.forEach(t => calcPMG(t));
+  updateProgress1();
+}
+
+function calcPMG(t) {
+  const pmg     = parseFloat(data.tab1[t]['pmg']);
+  const umidade = parseFloat(data.tab1[t]['umidade']);
+  const el = document.getElementById(`pmgcalc-${t}`);
+  if (!el) return;
+  if (!isNaN(pmg) && !isNaN(umidade) && umidade < 100) {
+    const corrigido = pmg * (100 - umidade) / (100 - 14);
+    el.textContent = corrigido.toFixed(4);
+    el.classList.remove('empty');
+    data.tab1[t]['pmg_corrigido'] = corrigido.toFixed(4);
+  } else {
+    el.textContent = '—';
+    el.classList.add('empty');
+    data.tab1[t]['pmg_corrigido'] = '';
+  }
+}
+
+function onTab1Change(el) {
+  data.tab1[el.dataset.trat][el.dataset.field] = el.value;
+  el.classList.toggle('filled', el.value !== '');
+  calcPMG(el.dataset.trat);
+  save(); updateProgress1(); showToast('Salvo ✓');
+}
+
+function updateProgress1() {
+  let total = 0, filled = 0;
+  TRATAMENTOS.forEach(t => TAB1_FIELDS.forEach(f => { total++; if(data.tab1[t][f.key]!=='') filled++; }));
+  const pct = total ? Math.round(filled/total*100) : 0;
+  document.getElementById('prog1').style.width = pct+'%';
+  document.getElementById('prog1-lbl').textContent = `${filled} / ${total}`;
+  document.getElementById('stats1').innerHTML = `
+    <div class="stat-chip"><strong>${filled}</strong>Preenchidos</div>
+    <div class="stat-chip"><strong>${total-filled}</strong>Restantes</div>
+    <div class="stat-chip"><strong>${pct}%</strong>Completo</div>`;
+}
+
+function clearTab1() {
+  if (!confirm('Limpar TODOS os dados da Aba 1?')) return;
+  TRATAMENTOS.forEach(t => TAB1_FIELDS.forEach(f => { data.tab1[t][f.key]=''; }));
+  save(); renderTab1(); showToast('Aba 1 limpa ✓');
+}
+
+// ── TAB 2 ──
+function onTrat2Change() {
+  currentTrat2 = document.getElementById('trat2-select').value;
+  document.getElementById('trat2-badge').textContent = currentTrat2;
+  document.getElementById('pdf-trat-select').value = currentTrat2;
+  renderTab2();
+}
+
+function renderTab2() {
+  const t = currentTrat2;
+  document.getElementById('tab2-label').textContent = `50 Plantas — ${t}`;
+  const tbody = document.getElementById('tbody2');
+  tbody.innerHTML = '';
+  for (let i = 1; i <= N_PLANTAS; i++) {
+    const tr = document.createElement('tr');
+    let html = `<td>P${String(i).padStart(2,'0')}</td>`;
+    TAB2_FIELDS.forEach(f => {
+      const val = data.tab2[t][i][f.key];
+      html += `<td><input type="number" step="any" inputmode="decimal"
+        class="${val!==''?'filled':''}" value="${val}"
+        data-planta="${i}" data-field="${f.key}"
+        oninput="onTab2Change(this)" placeholder="—"></td>`;
+    });
+    tr.innerHTML = html;
+    tbody.appendChild(tr);
+  }
+  updateProgress2();
+}
+
+function onTab2Change(el) {
+  data.tab2[currentTrat2][el.dataset.planta][el.dataset.field] = el.value;
+  el.classList.toggle('filled', el.value !== '');
+  save(); updateProgress2(); showToast('Salvo ✓');
+}
+
+function updateProgress2() {
+  const t = currentTrat2;
+  const total = N_PLANTAS * TAB2_FIELDS.length;
+  let filled = 0;
+  for (let i = 1; i <= N_PLANTAS; i++)
+    TAB2_FIELDS.forEach(f => { if(data.tab2[t][i][f.key]!=='') filled++; });
+  const pct = Math.round(filled/total*100);
+
+  document.getElementById('prog2').style.width = pct+'%';
+  document.getElementById('prog2-lbl').textContent = `${filled} / ${total}`;
+  document.getElementById('trat-prog-fill').style.width = pct+'%';
+  document.getElementById('trat-prog-lbl').textContent = `${filled} / ${total}`;
+  document.getElementById('stats2').innerHTML = `
+    <div class="stat-chip"><strong>${filled}</strong>Preenchidos</div>
+    <div class="stat-chip"><strong>${total-filled}</strong>Restantes</div>
+    <div class="stat-chip"><strong>${pct}%</strong>${t} completo</div>`;
+}
+
+function clearTab2() {
+  if (!confirm(`Limpar todos os dados de ${currentTrat2}?`)) return;
+  for (let i = 1; i <= N_PLANTAS; i++)
+    TAB2_FIELDS.forEach(f => { data.tab2[currentTrat2][i][f.key]=''; });
+  save(); renderTab2(); showToast(`${currentTrat2} limpo ✓`);
+}
+
+// ── TAB SWITCH ──
+function switchTab(id) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.tab-btn')[id==='tab1'?0:1].classList.add('active');
+  if (id==='tab2') renderTab2();
+}
+
+// ── TOAST ──
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 1600);
+}
+
+// ── PDF ──
+function generatePDF() {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    showToast('⚠ Biblioteca PDF não carregada. Verifique sua conexão.');
+    return;
+  }
+  const tratPDF = document.getElementById('pdf-trat-select').value;
+  const btn = document.getElementById('pdfBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Gerando...';
+
+  setTimeout(() => {
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+
+      const GD  = [29,53,40];
+      const GM  = [82,183,136];
+      const GP  = [216,243,220];
+      const LBG = [244,241,235];
+
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+
+      // Contagens
+      let t1Tot = TRATAMENTOS.length * TAB1_FIELDS.length, t1Fill = 0;
+      TRATAMENTOS.forEach(t => TAB1_FIELDS.forEach(f => { if(data.tab1[t][f.key]!=='') t1Fill++; }));
+      const t2Tot = N_PLANTAS * TAB2_FIELDS.length;
+      let t2Fill = 0;
+      for(let i=1;i<=N_PLANTAS;i++) TAB2_FIELDS.forEach(f => { if(data.tab2[tratPDF][i][f.key]!=='') t2Fill++; });
+
+      // ── CAPA ──
+      doc.setFillColor(...GD); doc.rect(0,0,297,210,'F');
+      doc.setFillColor(...GM); doc.rect(0,175,297,35,'F');
+
+      doc.setTextColor(...GP);
+      doc.setFontSize(42); doc.setFont('helvetica','bold');
+      doc.text('VERDIVO', 30, 68);
+
+      doc.setFontSize(13); doc.setFont('helvetica','normal');
+      doc.setTextColor(180,220,200);
+      doc.text('RELATÓRIO DE AVALIAÇÕES DE CAMPO', 30, 82);
+
+      doc.setFontSize(10); doc.setTextColor(130,170,150);
+      doc.text('Gerado em: ' + dateStr, 30, 95);
+
+      // Badge tratamento
+      doc.setFillColor(...GM);
+      doc.roundedRect(30, 105, 60, 22, 4, 4, 'F');
+      doc.setFontSize(16); doc.setFont('helvetica','bold');
+      doc.setTextColor(...GD);
+      doc.text(`Tratamento ${tratPDF}`, 38, 120);
+
+      // Resumo
+      doc.setFillColor(45,80,60);
+      doc.roundedRect(30, 135, 230, 28, 4, 4, 'F');
+      doc.setFontSize(9); doc.setFont('helvetica','normal');
+      doc.setTextColor(...GP);
+      doc.text(`ABA 1 — Colheita (todos tratamentos):  ${t1Fill} / ${t1Tot} campos  (${Math.round(t1Fill/t1Tot*100)}%)`, 42, 148);
+      doc.text(`ABA 2 — Morfologia ${tratPDF}:  ${t2Fill} / ${t2Tot} campos  (${Math.round(t2Fill/t2Tot*100)}%)`, 42, 158);
+
+      // ── ABA 1 ──
+      doc.addPage('a4','landscape');
+      doc.setFillColor(...LBG); doc.rect(0,0,297,210,'F');
+      doc.setFillColor(...GD); doc.rect(0,0,297,18,'F');
+      doc.setFontSize(11); doc.setFont('helvetica','bold');
+      doc.setTextColor(...GP);
+      doc.text('ABA 1 — AVALIAÇÃO DE COLHEITA', 14, 12);
+      doc.setFontSize(7); doc.setFont('helvetica','normal');
+      doc.setTextColor(...GM); doc.text(dateStr, 248, 12);
+
+      doc.autoTable({
+        head:[['Tratamento',...TAB1_FIELDS.map(f=>f.label),'PMG Corrigido 14% (g)']],
+        body: TRATAMENTOS.map(t=>[
+          t,
+          ...TAB1_FIELDS.map(f=>data.tab1[t][f.key]!==''?data.tab1[t][f.key]:'—'),
+          data.tab1[t]['pmg_corrigido']!==''&&data.tab1[t]['pmg_corrigido']!=null ? data.tab1[t]['pmg_corrigido'] : '—'
+        ]),
+        startY:24, theme:'grid',
+        headStyles:{ fillColor:GD, textColor:GP, fontStyle:'bold', halign:'center', fontSize:8 },
+        bodyStyles:{ halign:'center', fontSize:9 },
+        columnStyles:{
+          0:{ halign:'left', fontStyle:'bold', textColor:[29,106,74] },
+          5:{ fillColor:[216,243,220], textColor:[29,106,74], fontStyle:'bold' }
+        },
+        alternateRowStyles:{ fillColor:[245,250,247] },
+        margin:{ left:14, right:14 },
+      });
+
+      // ── ABA 2 — só o tratamento selecionado ──
+      doc.addPage('a4','landscape');
+      doc.setFillColor(...LBG); doc.rect(0,0,297,210,'F');
+      doc.setFillColor(...GD); doc.rect(0,0,297,18,'F');
+      doc.setFillColor(...GM); doc.rect(0,18,5,192,'F');
+      doc.setFontSize(11); doc.setFont('helvetica','bold');
+      doc.setTextColor(...GP);
+      doc.text(`ABA 2 — AVALIAÇÃO MORFOLÓGICA  ·  ${tratPDF}`, 14, 12);
+      doc.setFontSize(7); doc.setFont('helvetica','normal');
+      doc.setTextColor(...GM); doc.text(dateStr, 248, 12);
+
+      const rows = [];
+      for(let i=1;i<=N_PLANTAS;i++){
+        rows.push([`P${String(i).padStart(2,'0')}`,...TAB2_FIELDS.map(f=>data.tab2[tratPDF][i][f.key]!==''?data.tab2[tratPDF][i][f.key]:'—')]);
+      }
+
+      // Calcular médias por campo
+      const medias = TAB2_FIELDS.map(f => {
+        const vals = [];
+        for(let i=1;i<=N_PLANTAS;i++){
+          const v = parseFloat(data.tab2[tratPDF][i][f.key]);
+          if(!isNaN(v)) vals.push(v);
+        }
+        return vals.length > 0 ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2) : '—';
+      });
+
+      const mediaRow = ['MÉDIA', ...medias];
+
+      doc.autoTable({
+        head:[['Planta',...TAB2_FIELDS.map(f=>f.label)]],
+        body: rows,
+        startY:24, theme:'grid',
+        headStyles:{ fillColor:GD, textColor:GP, fontStyle:'bold', halign:'center', fontSize:8 },
+        bodyStyles:{ halign:'center', fontSize:7.5 },
+        columnStyles:{ 0:{ halign:'left', fontStyle:'bold', textColor:[29,106,74] } },
+        alternateRowStyles:{ fillColor:[245,250,247] },
+        margin:{ left:14, right:14 },
+        rowPageBreak:'auto',
+        didDrawPage: function(hookData) {
+          // rodapé da última página com a linha de média
+        },
+      });
+
+      // Linha de média — adicionada após a tabela
+      doc.autoTable({
+        head:[],
+        body:[ mediaRow ],
+        startY: doc.lastAutoTable.finalY,
+        theme:'grid',
+        bodyStyles:{ halign:'center', fontSize:8, fontStyle:'bold', fillColor:[216,243,220], textColor:[29,106,74] },
+        columnStyles:{ 0:{ halign:'left' } },
+        margin:{ left:14, right:14 },
+        tableLineColor: GD,
+        tableLineWidth: 0.3,
+      });
+
+      // Numeração
+      const totalPg = doc.getNumberOfPages();
+      for(let i=2;i<=totalPg;i++){
+        doc.setPage(i);
+        doc.setFontSize(7); doc.setTextColor(150);
+        doc.text(`Página ${i} de ${totalPg}`, 258, 206);
+        doc.text(`Verdivo — ${tratPDF}`, 14, 206);
+      }
+
+      doc.save(`verdivo_${tratPDF}_${now.toISOString().slice(0,10)}.pdf`);
+      showToast(`PDF ${tratPDF} gerado! ✓`);
+    } catch(err) {
+      console.error(err);
+      showToast('Erro ao gerar PDF: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '⬇ Baixar PDF';
+    }
+  }, 50);
+}
+
+// ── INIT ──
+renderTab1();
+renderTab2();
+</script>
+</body>
+</html>
