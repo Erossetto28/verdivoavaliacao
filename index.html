@@ -557,7 +557,14 @@ function loadProtocols() {
       else if (v.name) protoMeta[v.name] = { tratCount: v.tratCount || 10, hasRep: v.hasRep !== false, name: v.name };
     });
     protocols = Object.keys(protoMeta);
-    renderProtocols();
+
+    // Carrega dados de todos os protocolos para mostrar % correto na tela inicial
+    const loadPromises = protocols.map(name => {
+      return firebase.get(firebase.ref(firebase.db, `protocolos/${protoKey(name)}`))
+        .then(snap => { allData[name] = snap.val() || {}; });
+    });
+    Promise.all(loadPromises).then(() => renderProtocols());
+
     updateConnStatus('online');
   }, () => updateConnStatus('offline'));
 }
@@ -667,7 +674,6 @@ function subscribeToProto(name) {
     renderProtocols();
     if (currentProto === name) {
       updateModeScreenPct();
-      renderTratRepGrid();
       renderOverview();
       if (document.getElementById('screen-eval').classList.contains('active')) renderEvalTable();
       if (document.getElementById('screen-colheita').classList.contains('active')) loadColheitaFields();
@@ -727,13 +733,22 @@ function isTratComplete(t) {
 
 function isRepComplete(t, r) {
   if (currentMode === 'colheita') {
-    const d = allData[currentProto]?.colheita?.[t]?.[r];
-    if (!d) return false;
-    return d.peso !== undefined && d.peso !== '' && d.peso !== null
-        && d.umidade !== undefined && d.umidade !== '' && d.umidade !== null;
+    const proto = allData[currentProto];
+    if (!proto) return false;
+    // colheita data is stored under proto.colheita
+    const cd = proto?.colheita?.[t]?.[r];
+    if (!cd || typeof cd !== 'object') return false;
+    const pesoOk    = cd.peso    !== undefined && cd.peso    !== '' && cd.peso    !== null;
+    const umidadeOk = cd.umidade !== undefined && cd.umidade !== '' && cd.umidade !== null;
+    return pesoOk && umidadeOk;
   }
-  const d = allData[currentProto]?.[t]?.[r];
-  if (!d) return false;
+  // morfologia — data stored directly under proto[t][r]
+  const proto = allData[currentProto];
+  if (!proto) return false;
+  const d = proto?.[t]?.[r];
+  if (!d || typeof d !== 'object') return false;
+  // make sure it's not the colheita node accidentally
+  if (d.colheita) return false;
   for(let i=1;i<=N_ESPIGAS;i++) {
     for(const f of FIELDS) {
       const val = d[i]?.[f.key];
