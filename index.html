@@ -367,7 +367,7 @@
       <div style="background:var(--verde-pale);border:1.5px solid var(--verde-light);border-radius:8px;padding:1rem">
         <div class="trat-rep-label" style="margin-bottom:0.4rem;color:var(--verde)">Peso corrigido para 14% (g)</div>
         <div id="colh-corrigido" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.4rem;color:var(--verde)">—</div>
-        <div style="font-size:0.65rem;color:var(--gray);margin-top:0.3rem">Fórmula: Peso × (100 − Umidade) ÷ 86</div>
+        <div style="font-size:0.65rem;color:var(--gray);margin-top:0.3rem">Fórmula: Peso × (100 − Umidade Inicial) ÷ (100 − 14)</div>
       </div>
     </div>
   </div>
@@ -614,7 +614,7 @@ function onColheitaChange() {
     }).catch(() => {
       document.getElementById('syncStatusColh').textContent = '⚠ Erro ao salvar';
     });
-  }, 600);
+  }, 2000);
 }
 
 function clearCurrentColheita() {
@@ -727,13 +727,17 @@ function isTratComplete(t) {
 
 function isRepComplete(t, r) {
   if (currentMode === 'colheita') {
-    const d = allData[currentProto]?.colheita?.[t]?.[r] || {};
-    return d.peso !== undefined && d.peso !== '' && d.umidade !== undefined && d.umidade !== '';
+    const d = allData[currentProto]?.colheita?.[t]?.[r];
+    if (!d) return false;
+    return d.peso !== undefined && d.peso !== '' && d.peso !== null
+        && d.umidade !== undefined && d.umidade !== '' && d.umidade !== null;
   }
-  const d = allData[currentProto]?.[t]?.[r] || {};
+  const d = allData[currentProto]?.[t]?.[r];
+  if (!d) return false;
   for(let i=1;i<=N_ESPIGAS;i++) {
     for(const f of FIELDS) {
-      if (!d[i]?.[f.key] && d[i]?.[f.key] !== 0) return false;
+      const val = d[i]?.[f.key];
+      if (val === undefined || val === null || val === '') return false;
     }
   }
   return true;
@@ -858,7 +862,7 @@ function onEvalChange(el) {
       document.getElementById('syncStatus').textContent = '⚠ Erro ao salvar';
       showToast('⚠ Sem conexão');
     });
-  }, 600);
+  }, 2000);
 }
 
 function updateEvalProgress() {
@@ -1123,7 +1127,7 @@ function generatePDF() {
           const corrigidos = repList.map(r => {
             const cd = d.colheita?.[t]?.[r] || {};
             const p=parseFloat(cd.peso), u=parseFloat(cd.umidade);
-            return (!isNaN(p)&&!isNaN(u)&&u<100) ? p*(100-u)/86 : null;
+            return (!isNaN(p)&&!isNaN(u)&&u<100) ? p*(100-u)/(100-14) : null;
           });
           const medCorr = corrigidos.filter(v=>v!==null);
           const medCorrVal = medCorr.length>0 ? medCorr.reduce((a,b)=>a+b,0)/medCorr.length : null;
@@ -1137,7 +1141,7 @@ function generatePDF() {
         } else {
           const cd = d.colheita?.[t]?.['R1'] || {};
           const p=parseFloat(cd.peso), u=parseFloat(cd.umidade);
-          const corr = (!isNaN(p)&&!isNaN(u)&&u<100) ? (p*(100-u)/86).toFixed(2) : '—';
+          const corr = (!isNaN(p)&&!isNaN(u)&&u<100) ? (p*(100-u)/(100-14)).toFixed(2) : '—';
           return [t, cd.peso||'—', cd.umidade||'—', corr];
         }
       });
@@ -1174,7 +1178,7 @@ function generatePDF() {
         const corrVals = repList.map(r => {
           const cd = d.colheita?.[t]?.[r] || {};
           const p=parseFloat(cd.peso), u=parseFloat(cd.umidade);
-          return (!isNaN(p)&&!isNaN(u)&&u<100) ? p*(100-u)/86 : null;
+          return (!isNaN(p)&&!isNaN(u)&&u<100) ? p*(100-u)/(100-14) : null;
         }).filter(v=>v!==null);
         const mCorr = corrVals.length>0 ? corrVals.reduce((a,b)=>a+b,0)/corrVals.length : 0;
 
