@@ -768,6 +768,7 @@ function renderOverview() {
   wrap.innerHTML = '';
   const tratamentos = getTratamentos();
   const comRep = hasRep();
+  const isColheita = currentMode === 'colheita';
 
   if (comRep) {
     const hdr = document.createElement('div');
@@ -780,25 +781,40 @@ function renderOverview() {
       row.style.cssText = 'display:grid;grid-template-columns:2rem repeat(5,1fr);gap:0.4rem;margin-bottom:0.3rem';
       let html = `<div class="ov-label" style="display:flex;align-items:center">${t}</div>`;
       REPS.forEach(r => {
-        const d = allData[currentProto]?.[t]?.[r] || {};
-        let filled=0, total=N_ESPIGAS*FIELDS.length;
-        for(let i=1;i<=N_ESPIGAS;i++) FIELDS.forEach(f=>{ if(d[i]?.[f.key]!==undefined&&d[i]?.[f.key]!=='') filled++; });
-        const cls = filled===total?'done':filled>0?'partial':'';
+        let filled=0, total=0, cls='';
+        if (isColheita) {
+          total = 2; // peso + umidade
+          const cd = allData[currentProto]?.colheita?.[t]?.[r];
+          if (cd?.peso !== undefined && cd?.peso !== '' && cd?.peso !== null) filled++;
+          if (cd?.umidade !== undefined && cd?.umidade !== '' && cd?.umidade !== null) filled++;
+        } else {
+          total = N_ESPIGAS * FIELDS.length;
+          const d = allData[currentProto]?.[t]?.[r] || {};
+          for(let i=1;i<=N_ESPIGAS;i++) FIELDS.forEach(f=>{ if(d[i]?.[f.key]!==undefined&&d[i]?.[f.key]!=='') filled++; });
+        }
+        cls = filled===total && total>0 ? 'done' : filled>0 ? 'partial' : '';
         html += `<div class="ov-cell ${cls}">${filled>0?Math.round(filled/total*100)+'%':'·'}</div>`;
       });
       row.innerHTML = html;
       wrap.appendChild(row);
     });
   } else {
-    // Sem repetições — grid simples de tratamentos
     const grid = document.createElement('div');
     grid.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem';
     tratamentos.forEach(t => {
-      const d = allData[currentProto]?.[t]?.['R1'] || {};
-      let filled=0, total=N_ESPIGAS*FIELDS.length;
-      for(let i=1;i<=N_ESPIGAS;i++) FIELDS.forEach(f=>{ if(d[i]?.[f.key]!==undefined&&d[i]?.[f.key]!=='') filled++; });
-      const pct = Math.round(filled/total*100);
-      const cls = filled===total?'done':filled>0?'partial':'';
+      let filled=0, total=0;
+      if (isColheita) {
+        total = 2;
+        const cd = allData[currentProto]?.colheita?.[t]?.['R1'];
+        if (cd?.peso !== undefined && cd?.peso !== '' && cd?.peso !== null) filled++;
+        if (cd?.umidade !== undefined && cd?.umidade !== '' && cd?.umidade !== null) filled++;
+      } else {
+        total = N_ESPIGAS * FIELDS.length;
+        const d = allData[currentProto]?.[t]?.['R1'] || {};
+        for(let i=1;i<=N_ESPIGAS;i++) FIELDS.forEach(f=>{ if(d[i]?.[f.key]!==undefined&&d[i]?.[f.key]!=='') filled++; });
+      }
+      const pct = total>0 ? Math.round(filled/total*100) : 0;
+      const cls = filled===total && total>0 ? 'done' : filled>0 ? 'partial' : '';
       grid.innerHTML += `<div class="ov-cell ${cls}" style="padding:0.6rem">
         <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.9rem">${t}</div>
         <div>${filled>0?pct+'%':'·'}</div>
