@@ -674,9 +674,18 @@ function subscribeToProto(name) {
     renderProtocols();
     if (currentProto === name) {
       updateModeScreenPct();
-      renderOverview();
-      if (document.getElementById('screen-eval').classList.contains('active')) renderEvalTable();
-      if (document.getElementById('screen-colheita').classList.contains('active')) loadColheitaFields();
+      // Só re-renderiza overview se o utilizador não estiver na tela de avaliação
+      const onEvalScreen    = document.getElementById('screen-eval').classList.contains('active');
+      const onColhScreen    = document.getElementById('screen-colheita').classList.contains('active');
+      const onSelScreen     = document.getElementById('screen-sel').classList.contains('active');
+      if (onSelScreen) renderOverview();
+      if (onEvalScreen) {
+        updateEvalProgress();
+        document.getElementById('syncStatus').textContent = 'Sincronizado ✓';
+      }
+      if (onColhScreen) {
+        document.getElementById('syncStatusColh').textContent = 'Sincronizado ✓';
+      }
     }
     updateConnStatus('online');
   }, () => updateConnStatus('offline'));
