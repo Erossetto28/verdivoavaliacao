@@ -674,18 +674,13 @@ function subscribeToProto(name) {
     renderProtocols();
     if (currentProto === name) {
       updateModeScreenPct();
-      // Só re-renderiza overview se o utilizador não estiver na tela de avaliação
-      const onEvalScreen    = document.getElementById('screen-eval').classList.contains('active');
-      const onColhScreen    = document.getElementById('screen-colheita').classList.contains('active');
-      const onSelScreen     = document.getElementById('screen-sel').classList.contains('active');
-      if (onSelScreen) renderOverview();
-      if (onEvalScreen) {
-        updateEvalProgress();
-        document.getElementById('syncStatus').textContent = 'Sincronizado ✓';
-      }
-      if (onColhScreen) {
-        document.getElementById('syncStatusColh').textContent = 'Sincronizado ✓';
-      }
+      const onSelScreen  = document.getElementById('screen-sel').classList.contains('active');
+      const onEvalScreen = document.getElementById('screen-eval').classList.contains('active');
+      const onColhScreen = document.getElementById('screen-colheita').classList.contains('active');
+      if (onSelScreen)  renderOverview();
+      // Nas telas de avaliação: apenas atualiza o texto de status, sem recriar a tabela
+      if (onEvalScreen) document.getElementById('syncStatus').textContent = 'Sincronizado ✓';
+      if (onColhScreen) document.getElementById('syncStatusColh').textContent = 'Sincronizado ✓';
     }
     updateConnStatus('online');
   }, () => updateConnStatus('offline'));
