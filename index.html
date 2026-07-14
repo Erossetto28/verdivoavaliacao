@@ -353,9 +353,9 @@
 
     <div style="display:grid;gap:0.75rem">
       <div>
-        <div class="trat-rep-label" style="margin-bottom:0.4rem">Peso total das 8 espigas (g)</div>
+        <div class="trat-rep-label" style="margin-bottom:0.4rem">PMG (g)</div>
         <input type="number" step="any" inputmode="decimal" id="colh-peso"
-          class="proto-input" style="width:100%" placeholder="Ex: 1250.5"
+          class="proto-input" style="width:100%" placeholder="Ex: 285.4"
           oninput="onColheitaChange()">
       </div>
       <div>
@@ -365,9 +365,9 @@
           oninput="onColheitaChange()">
       </div>
       <div style="background:var(--verde-pale);border:1.5px solid var(--verde-light);border-radius:8px;padding:1rem">
-        <div class="trat-rep-label" style="margin-bottom:0.4rem;color:var(--verde)">Peso corrigido para 14% (g)</div>
+        <div class="trat-rep-label" style="margin-bottom:0.4rem;color:var(--verde)">PMG corrigido para 14% (g)</div>
         <div id="colh-corrigido" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.4rem;color:var(--verde)">—</div>
-        <div style="font-size:0.65rem;color:var(--gray);margin-top:0.3rem">Fórmula: Peso × (100 − Umidade Inicial) ÷ (100 − 14)</div>
+        <div style="font-size:0.65rem;color:var(--gray);margin-top:0.3rem">Fórmula: PMG × (100 − Umidade Inicial) ÷ (100 − 14)</div>
       </div>
     </div>
   </div>
@@ -603,18 +603,22 @@ function onColheitaChange() {
   calcCorrigido(peso, umidade);
   document.getElementById('syncStatusColh').textContent = 'Salvando...';
 
+  // Captura T, R e protocolo no momento do input — não no momento do disparo
+  const savedTrat  = currentTrat;
+  const savedRep   = currentRep;
+  const savedProto = currentProto;
+
   clearTimeout(colhSaveTimer);
   colhSaveTimer = setTimeout(() => {
-    const key = protoKey(currentProto);
+    const key = protoKey(savedProto);
     firebase.set(
-      firebase.ref(firebase.db, `protocolos/${key}/colheita/${currentTrat}/${currentRep}`),
+      firebase.ref(firebase.db, `protocolos/${key}/colheita/${savedTrat}/${savedRep}`),
       { peso, umidade }
     ).then(() => {
-      // Update local cache
-      if (!allData[currentProto]) allData[currentProto] = {};
-      if (!allData[currentProto].colheita) allData[currentProto].colheita = {};
-      if (!allData[currentProto].colheita[currentTrat]) allData[currentProto].colheita[currentTrat] = {};
-      allData[currentProto].colheita[currentTrat][currentRep] = { peso, umidade };
+      if (!allData[savedProto]) allData[savedProto] = {};
+      if (!allData[savedProto].colheita) allData[savedProto].colheita = {};
+      if (!allData[savedProto].colheita[savedTrat]) allData[savedProto].colheita[savedTrat] = {};
+      allData[savedProto].colheita[savedTrat][savedRep] = { peso, umidade };
       document.getElementById('syncStatusColh').textContent = 'Sincronizado ✓';
       updateModeScreenPct();
       showToast('Salvo ✓');
@@ -883,12 +887,16 @@ function onEvalChange(el) {
   updateEvalProgress();
   document.getElementById('syncStatus').textContent = 'Salvando...';
 
-  // Debounce Firebase write
+  // Captura T, R, protocolo e espiga no momento do input — não no momento do disparo
+  const savedTrat  = currentTrat;
+  const savedRep   = currentRep;
+  const savedProto = currentProto;
+
   clearTimeout(el._saveTimer);
   el._saveTimer = setTimeout(() => {
-    const key = protoKey(currentProto);
+    const key = protoKey(savedProto);
     firebase.set(
-      firebase.ref(firebase.db, `protocolos/${key}/${currentTrat}/${currentRep}/${i}/${f}`),
+      firebase.ref(firebase.db, `protocolos/${key}/${savedTrat}/${savedRep}/${i}/${f}`),
       val
     ).then(() => {
       document.getElementById('syncStatus').textContent = 'Sincronizado ✓';
@@ -1149,13 +1157,13 @@ function generatePDF() {
       doc.setFillColor(...GM); doc.rect(0,18,5,192,'F');
       doc.setFontSize(11); doc.setFont('helvetica','bold');
       doc.setTextColor(...GP);
-      doc.text(`${currentProto}  ·  COLHEITA — PESO CORRIGIDO 14%`, 14, 12);
+      doc.text(`${currentProto}  ·  COLHEITA — PMG CORRIGIDO 14%`, 14, 12);
       doc.setFontSize(7); doc.setFont('helvetica','normal');
       doc.setTextColor(...GM); doc.text(dateStr, 248, 12);
 
       const colhHead = comRep
-        ? [['Tratamento', ...repList.map(r=>`${r}\nPeso (g)`), ...repList.map(r=>`${r}\nUmidade (%)`), ...repList.map(r=>`${r}\nCorrigido (g)`), 'MÉD\nCorrigido (g)']]
-        : [['Tratamento', 'Peso (g)', 'Umidade (%)', 'Corrigido (g)']];
+        ? [['Tratamento', ...repList.map(r=>`${r}\nPMG (g)`), ...repList.map(r=>`${r}\nUmidade (%)`), ...repList.map(r=>`${r}\nPMG Corr. (g)`), 'MÉD\nPMG Corr. (g)']]
+        : [['Tratamento', 'PMG (g)', 'Umidade (%)', 'PMG Corrigido (g)']];
 
       const colhBody = tratamentos.map(t => {
         if (comRep) {
@@ -1235,7 +1243,7 @@ function generatePDF() {
       });
       scores.sort((a,b) => b.total - a.total);
 
-      const rankHead = [['#', 'Tratamento', 'Comp. Espiga\n(cm)', 'N° Fileiras', 'Esp. Espiga\n(mm)', 'Peso Corrigido\n14% (g)', 'Score\nGlobal (%)']];
+      const rankHead = [['#', 'Tratamento', 'Comp. Espiga\n(cm)', 'N° Fileiras', 'Esp. Espiga\n(mm)', 'PMG Corrigido\n14% (g)', 'Score\nGlobal (%)']];
       const rankBody = scores.map((s,i) => [
         `${i+1}°`,
         s.t,
