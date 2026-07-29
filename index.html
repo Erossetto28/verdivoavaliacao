@@ -353,6 +353,12 @@
 
     <div style="display:grid;gap:0.75rem">
       <div>
+        <div class="trat-rep-label" style="margin-bottom:0.4rem">Peso de 8 Espigas (g)</div>
+        <input type="number" step="any" inputmode="decimal" id="colh-peso8"
+          class="proto-input" style="width:100%" placeholder="Ex: 1250.5"
+          oninput="onColheitaChange()">
+      </div>
+      <div>
         <div class="trat-rep-label" style="margin-bottom:0.4rem">PMG (g)</div>
         <input type="number" step="any" inputmode="decimal" id="colh-peso"
           class="proto-input" style="width:100%" placeholder="Ex: 285.4"
@@ -574,8 +580,10 @@ function loadProtocols() {
 // ══════════════════════════════════════════════
 function loadColheitaFields() {
   const d = allData[currentProto]?.colheita?.[currentTrat]?.[currentRep] || {};
+  const peso8   = d.peso8   ?? '';
   const peso    = d.peso    ?? '';
   const umidade = d.umidade ?? '';
+  document.getElementById('colh-peso8').value   = peso8;
   document.getElementById('colh-peso').value    = peso;
   document.getElementById('colh-umidade').value = umidade;
   calcCorrigido(peso, umidade);
@@ -598,12 +606,12 @@ function calcCorrigido(peso, umidade) {
 
 let colhSaveTimer;
 function onColheitaChange() {
+  const peso8   = document.getElementById('colh-peso8').value;
   const peso    = document.getElementById('colh-peso').value;
   const umidade = document.getElementById('colh-umidade').value;
   calcCorrigido(peso, umidade);
   document.getElementById('syncStatusColh').textContent = 'Salvando...';
 
-  // Captura T, R e protocolo no momento do input — não no momento do disparo
   const savedTrat  = currentTrat;
   const savedRep   = currentRep;
   const savedProto = currentProto;
@@ -613,12 +621,12 @@ function onColheitaChange() {
     const key = protoKey(savedProto);
     firebase.set(
       firebase.ref(firebase.db, `protocolos/${key}/colheita/${savedTrat}/${savedRep}`),
-      { peso, umidade }
+      { peso8, peso, umidade }
     ).then(() => {
       if (!allData[savedProto]) allData[savedProto] = {};
       if (!allData[savedProto].colheita) allData[savedProto].colheita = {};
       if (!allData[savedProto].colheita[savedTrat]) allData[savedProto].colheita[savedTrat] = {};
-      allData[savedProto].colheita[savedTrat][savedRep] = { peso, umidade };
+      allData[savedProto].colheita[savedTrat][savedRep] = { peso8, peso, umidade };
       document.getElementById('syncStatusColh').textContent = 'Sincronizado ✓';
       updateModeScreenPct();
       showToast('Salvo ✓');
@@ -634,6 +642,7 @@ function clearCurrentColheita() {
   firebase.set(firebase.ref(firebase.db, `protocolos/${key}/colheita/${currentTrat}/${currentRep}`), null);
   if (allData[currentProto]?.colheita?.[currentTrat])
     delete allData[currentProto].colheita[currentTrat][currentRep];
+  document.getElementById('colh-peso8').value = '';
   document.getElementById('colh-peso').value = '';
   document.getElementById('colh-umidade').value = '';
   document.getElementById('colh-corrigido').textContent = '—';
@@ -1022,7 +1031,7 @@ function generatePDF() {
       const repInfo = comRep ? 'Repetições: R1–R5' : 'Sem repetições';
       doc.text(`Tratamentos: T1–T${tratamentos.length}   ·   ${repInfo}   ·   ${N_ESPIGAS} espigas/tratamento`, 42, 142);
 
-      // ══ PÁGINA 2: RESUMO GERAL DE MÉDIAS ══
+      // ══ PÁGINA 2: RESUMO GERAL — 3 TABELAS SEPARADAS POR PARÂMETRO ══
       doc.addPage('a4','landscape');
       doc.setFillColor(...LBG); doc.rect(0,0,297,210,'F');
       doc.setFillColor(...GD); doc.rect(0,0,297,18,'F');
@@ -1033,51 +1042,69 @@ function generatePDF() {
       doc.setFontSize(7); doc.setFont('helvetica','normal');
       doc.setTextColor(...GM); doc.text(dateStr, 248, 12);
 
-      const resumoHead = comRep
-        ? [['Tratamento', ...repList.flatMap(r => FIELDS.map(f=>`${r}\n${f.label.split(' ')[0]}`)), ...FIELDS.map(f=>`MÉD TRAT\n${f.label.split(' ')[0]}`)]]
-        : [['Tratamento', ...FIELDS.map(f=>f.label)]];
+      // Cores por parâmetro
+      const paramColors = [
+        { head:[29,53,40],  highlight:[216,243,220], text:[29,106,74] },  // N° Fileiras — verde escuro
+        { head:[20,60,100], highlight:[213,232,255], text:[20,80,140] },  // Comp — azul
+        { head:[100,40,10], highlight:[255,235,210], text:[140,60,10] },  // Esp — terra
+      ];
 
-      const resumoBody = tratamentos.map(t => comRep
-        ? [t, ...repList.flatMap(r => FIELDS.map(f => fmt(mediaRep(t,r,f.key)))), ...FIELDS.map(f => fmt(mediaTrat(t,f.key)))]
-        : [t, ...FIELDS.map(f => fmt(mediaRep(t,'R1',f.key)))]
-      );
-      resumoBody.push(comRep
-        ? ['MÉD GERAL',
-            ...repList.flatMap(r => FIELDS.map(f => {
-              const vals = tratamentos.map(t=>mediaRep(t,r,f.key)).filter(v=>v!==null);
-              return vals.length>0 ? fmt(vals.reduce((a,b)=>a+b,0)/vals.length) : '—';
-            })),
-            ...FIELDS.map(f => fmt(mediaGeral(f.key, tratamentos)))]
-        : ['MÉD GERAL', ...FIELDS.map(f => fmt(mediaGeral(f.key, tratamentos)))]
-      );
+      FIELDS.forEach((f, fi) => {
+        const pc = paramColors[fi];
+        const tHead = [['Tratamento', ...repList.map(r=>r), 'MÉD']];
+        const tBody = tratamentos.map(t => {
+          const rVals = repList.map(r => fmt(mediaRep(t,r,f.key)));
+          const med   = fmt(mediaTrat(t,f.key));
+          return [t, ...rVals, med];
+        });
+        // Linha média geral
+        const geralVals = repList.map(r => {
+          const vals = tratamentos.map(t=>mediaRep(t,r,f.key)).filter(v=>v!==null);
+          return vals.length>0 ? fmt(vals.reduce((a,b)=>a+b,0)/vals.length) : '—';
+        });
+        tBody.push(['MÉD GERAL', ...geralVals, fmt(mediaGeral(f.key, tratamentos))]);
 
-      const nMedCols = REPS.length * FIELDS.length + FIELDS.length;
-      doc.autoTable({
-        head: resumoHead,
-        body: resumoBody,
-        startY: 24,
-        theme: 'grid',
-        headStyles:{ fillColor:GD, textColor:GP, fontStyle:'bold', halign:'center', fontSize:6 },
-        bodyStyles:{ halign:'center', fontSize:6.5 },
-        columnStyles:{ 0:{ halign:'left', fontStyle:'bold', textColor:[29,106,74], cellWidth:16 } },
-        alternateRowStyles:{ fillColor:[245,250,247] },
-        margin:{ left:14, right:14 },
-        willDrawCell(hook) {
-          const lastRow = resumoBody.length - 1;
-          const totalCols = 1 + REPS.length * FIELDS.length + FIELDS.length;
-          const firstMedTratCol = 1 + REPS.length * FIELDS.length;
-          // Linha média geral — azul esverdeado escuro
-          if(hook.row.index === lastRow){
-            hook.cell.styles.fillColor=[29,53,40];
-            hook.cell.styles.textColor=[216,243,220];
-            hook.cell.styles.fontStyle='bold';
+        const tableX  = 14 + fi * ((297-28)/3);
+        const tableW  = (297-28)/3 - 3;
+
+        doc.autoTable({
+          head: tHead,
+          body: tBody,
+          startY: 24,
+          startX: tableX,
+          tableWidth: tableW,
+          theme:'grid',
+          headStyles:{ fillColor:pc.head, textColor:[255,255,255], fontStyle:'bold', halign:'center', fontSize:7.5 },
+          bodyStyles:{ halign:'center', fontSize:7.5 },
+          columnStyles:{ 0:{ halign:'left', fontStyle:'bold', cellWidth:14 } },
+          alternateRowStyles:{ fillColor:[245,250,247] },
+          margin:{ left:tableX, right:297-(tableX+tableW) },
+          didParseCell(hook) {
+            const lastRow = tBody.length-1;
+            const lastCol = repList.length+1;
+            // Coluna MÉD — destaque
+            if(hook.column.index===lastCol && hook.row.index<lastRow){
+              hook.cell.styles.fillColor=pc.highlight;
+              hook.cell.styles.textColor=pc.text;
+              hook.cell.styles.fontStyle='bold';
+            }
+            // Linha MÉD GERAL
+            if(hook.row.index===lastRow){
+              hook.cell.styles.fillColor=pc.head;
+              hook.cell.styles.textColor=[255,255,255];
+              hook.cell.styles.fontStyle='bold';
+            }
           }
-          // Colunas média por tratamento — destaque verde
-          if(hook.row.index < lastRow && hook.column.index >= firstMedTratCol){
-            hook.cell.styles.fillColor=[216,243,220];
-            hook.cell.styles.textColor=[29,106,74];
-            hook.cell.styles.fontStyle='bold';
-          }
+        });
+
+        // Label do parâmetro abaixo da tabela
+        const labelY = doc.lastAutoTable.finalY + 4;
+        if(labelY < 205) {
+          doc.setFontSize(7); doc.setFont('helvetica','bold');
+          doc.setFillColor(...pc.head);
+          doc.roundedRect(tableX, labelY, tableW, 6, 1, 1, 'F');
+          doc.setTextColor(255,255,255);
+          doc.text(f.label, tableX + tableW/2, labelY+4.2, {align:'center'});
         }
       });
 
@@ -1113,24 +1140,25 @@ function generatePDF() {
             startX: 14 + ri * colW,
             tableWidth: colW - 2,
             theme:'grid',
-            headStyles:{ fillColor:GD, textColor:GP, fontStyle:'bold', halign:'center', fontSize:7 },
-            bodyStyles:{ halign:'center', fontSize:6.5 },
-            columnStyles:{ 0:{ halign:'left', fontStyle:'bold', textColor:[29,106,74], cellWidth:8 } },
+            headStyles:{ fillColor:GD, textColor:GP, fontStyle:'bold', halign:'center', fontSize:7.5 },
+            bodyStyles:{ halign:'center', fontSize:7.5 },
+            columnStyles:{ 0:{ halign:'left', fontStyle:'bold', textColor:[29,106,74], cellWidth:9 } },
             alternateRowStyles:{ fillColor:[245,250,247] },
             margin:{ left: 14 + ri*colW, right: 297-(14+ri*colW+colW-2) },
             willDrawCell(hook) {
               if(hook.row.index===rows.length-1){
-                hook.cell.styles.fillColor=[216,243,220];
-                hook.cell.styles.textColor=[29,106,74];
+                hook.cell.styles.fillColor=[29,53,40];
+                hook.cell.styles.textColor=[216,243,220];
                 hook.cell.styles.fontStyle='bold';
+                hook.cell.styles.fontSize=8;
               }
             }
           });
         });
 
-        // Linha média do tratamento (só para protocolos com repetição)
+        // Barra de média do tratamento
         if (comRep) {
-          const afterY = doc.lastAutoTable.finalY + 4;
+          const afterY = doc.lastAutoTable.finalY + 3;
           if (afterY < 195) {
             const medTratRows = [['MÉD TRATAMENTO', ...FIELDS.map(f => fmt(mediaTrat(t,f.key)))]];
             doc.autoTable({
@@ -1139,7 +1167,7 @@ function generatePDF() {
               startY: afterY,
               theme:'grid',
               headStyles:{ fillColor:[45,80,60], textColor:GP, fontStyle:'bold', halign:'center', fontSize:7 },
-              bodyStyles:{ halign:'center', fontSize:8, fontStyle:'bold', fillColor:[29,53,40], textColor:GP },
+              bodyStyles:{ halign:'center', fontSize:9, fontStyle:'bold', fillColor:[29,53,40], textColor:[216,243,220] },
               columnStyles:{ 0:{ halign:'left', cellWidth:40 } },
               margin:{ left:14, right:14 },
             });
@@ -1150,7 +1178,7 @@ function generatePDF() {
         doc.text(`Verdivo — ${currentProto} · ${t}`, 14, 206);
       });
 
-      // ══ PÁGINA: RESUMO DE COLHEITA ══
+      // ══ PÁGINA: COLHEITA ══
       doc.addPage('a4','landscape');
       doc.setFillColor(...LBG); doc.rect(0,0,297,210,'F');
       doc.setFillColor(...GD); doc.rect(0,0,297,18,'F');
@@ -1161,46 +1189,69 @@ function generatePDF() {
       doc.setFontSize(7); doc.setFont('helvetica','normal');
       doc.setTextColor(...GM); doc.text(dateStr, 248, 12);
 
-      const colhHead = comRep
-        ? [['Tratamento', ...repList.map(r=>`${r}\nPMG (g)`), ...repList.map(r=>`${r}\nUmidade (%)`), ...repList.map(r=>`${r}\nPMG Corr. (g)`), 'MÉD\nPMG Corr. (g)']]
-        : [['Tratamento', 'PMG (g)', 'Umidade (%)', 'PMG Corrigido (g)']];
-
-      const colhBody = tratamentos.map(t => {
-        if (comRep) {
-          const corrigidos = repList.map(r => {
+      // Para protocolo com repetição: uma tabela por repetição lado a lado
+      if (comRep) {
+        const colW2 = (297-28) / repList.length;
+        repList.forEach((r, ri) => {
+          const rows = tratamentos.map(t => {
             const cd = d.colheita?.[t]?.[r] || {};
             const p=parseFloat(cd.peso), u=parseFloat(cd.umidade);
-            return (!isNaN(p)&&!isNaN(u)&&u<100) ? p*(100-u)/(100-14) : null;
+            const corr = (!isNaN(p)&&!isNaN(u)&&u<100) ? (p*(100-u)/(100-14)).toFixed(2) : '—';
+            return [t, cd.peso8||'—', cd.peso||'—', cd.umidade||'—', corr];
           });
-          const medCorr = corrigidos.filter(v=>v!==null);
-          const medCorrVal = medCorr.length>0 ? medCorr.reduce((a,b)=>a+b,0)/medCorr.length : null;
-          return [
-            t,
-            ...repList.map(r => { const cd=d.colheita?.[t]?.[r]||{}; return cd.peso||'—'; }),
-            ...repList.map(r => { const cd=d.colheita?.[t]?.[r]||{}; return cd.umidade||'—'; }),
-            ...corrigidos.map(v => v!==null?v.toFixed(2):'—'),
-            medCorrVal!==null ? medCorrVal.toFixed(2) : '—',
-          ];
-        } else {
-          const cd = d.colheita?.[t]?.['R1'] || {};
-          const p=parseFloat(cd.peso), u=parseFloat(cd.umidade);
-          const corr = (!isNaN(p)&&!isNaN(u)&&u<100) ? (p*(100-u)/(100-14)).toFixed(2) : '—';
-          return [t, cd.peso||'—', cd.umidade||'—', corr];
-        }
-      });
+          // Linha média corrigido
+          const corrVals = tratamentos.map(t => {
+            const cd=d.colheita?.[t]?.[r]||{};
+            const p=parseFloat(cd.peso),u=parseFloat(cd.umidade);
+            return (!isNaN(p)&&!isNaN(u)&&u<100)?p*(100-u)/(100-14):null;
+          }).filter(v=>v!==null);
+          const medCorr = corrVals.length>0?(corrVals.reduce((a,b)=>a+b,0)/corrVals.length).toFixed(2):'—';
+          rows.push(['MÉD','—','—','—', medCorr]);
 
-      doc.autoTable({
-        head: colhHead,
-        body: colhBody,
-        startY: 24, theme:'grid',
-        headStyles:{ fillColor:GD, textColor:GP, fontStyle:'bold', halign:'center', fontSize:7 },
-        bodyStyles:{ halign:'center', fontSize:8 },
-        columnStyles:{ 0:{ halign:'left', fontStyle:'bold', textColor:[29,106,74] } },
-        alternateRowStyles:{ fillColor:[245,250,247] },
-        margin:{ left:14, right:14 },
-      });
+          doc.autoTable({
+            head:[[r,'P8E\n(g)','PMG\n(g)','Umid\n(%)','PMG\nCorr.']],
+            body: rows,
+            startY: 24,
+            startX: 14 + ri*colW2,
+            tableWidth: colW2-2,
+            theme:'grid',
+            headStyles:{ fillColor:GD, textColor:GP, fontStyle:'bold', halign:'center', fontSize:7 },
+            bodyStyles:{ halign:'center', fontSize:7 },
+            columnStyles:{ 0:{ halign:'left', fontStyle:'bold', textColor:[29,106,74], cellWidth:9 } },
+            alternateRowStyles:{ fillColor:[245,250,247] },
+            margin:{ left:14+ri*colW2, right:297-(14+ri*colW2+colW2-2) },
+            willDrawCell(hook) {
+              if(hook.row.index===rows.length-1){
+                hook.cell.styles.fillColor=[29,53,40];
+                hook.cell.styles.textColor=[216,243,220];
+                hook.cell.styles.fontStyle='bold';
+              }
+              // Coluna PMG Corr destacada
+              if(hook.column.index===4 && hook.row.index<rows.length-1){
+                hook.cell.styles.fillColor=[216,243,220];
+                hook.cell.styles.textColor=[29,106,74];
+                hook.cell.styles.fontStyle='bold';
+              }
+            }
+          });
+        });
+      } else {
+        const colhHead = [['Tratamento','Peso 8 Espigas (g)','PMG (g)','Umidade (%)','PMG Corrigido (g)']];
+        const colhBody = tratamentos.map(t => {
+          const cd=d.colheita?.[t]?.['R1']||{};
+          const p=parseFloat(cd.peso),u=parseFloat(cd.umidade);
+          const corr=(!isNaN(p)&&!isNaN(u)&&u<100)?(p*(100-u)/(100-14)).toFixed(2):'—';
+          return [t,cd.peso8||'—',cd.peso||'—',cd.umidade||'—',corr];
+        });
+        doc.autoTable({ head:colhHead, body:colhBody, startY:24, theme:'grid',
+          headStyles:{ fillColor:GD, textColor:GP, fontStyle:'bold', halign:'center', fontSize:9 },
+          bodyStyles:{ halign:'center', fontSize:9 },
+          columnStyles:{ 0:{ halign:'left', fontStyle:'bold', textColor:[29,106,74] },
+            4:{ fillColor:[216,243,220], textColor:[29,106,74], fontStyle:'bold' } },
+          alternateRowStyles:{ fillColor:[245,250,247] }, margin:{ left:40, right:40 } });
+      }
 
-      // ══ PÁGINA: RANKING DOS TRATAMENTOS ══
+      // ══ PÁGINA: RANKING ══
       doc.addPage('a4','landscape');
       doc.setFillColor(...GD); doc.rect(0,0,297,210,'F');
       doc.setFillColor(...GM); doc.rect(0,18,5,192,'F');
@@ -1210,77 +1261,118 @@ function generatePDF() {
       doc.setFontSize(7); doc.setFont('helvetica','normal');
       doc.setTextColor(...GM); doc.text(dateStr, 248, 12);
 
-      // Calcula scores por tratamento
+      // Calcula scores
       const scores = tratamentos.map(t => {
-        // Morfologia: médias de cada campo
         const mComp = mediaTrat(t,'comp') || 0;
         const mFil  = mediaTrat(t,'fileiras') || 0;
         const mEsp  = mediaTrat(t,'esp') || 0;
-
-        // Colheita: média do corrigido entre reps
         const corrVals = repList.map(r => {
-          const cd = d.colheita?.[t]?.[r] || {};
-          const p=parseFloat(cd.peso), u=parseFloat(cd.umidade);
-          return (!isNaN(p)&&!isNaN(u)&&u<100) ? p*(100-u)/(100-14) : null;
+          const cd=d.colheita?.[t]?.[r]||{};
+          const p=parseFloat(cd.peso),u=parseFloat(cd.umidade);
+          return (!isNaN(p)&&!isNaN(u)&&u<100)?p*(100-u)/(100-14):null;
         }).filter(v=>v!==null);
-        const mCorr = corrVals.length>0 ? corrVals.reduce((a,b)=>a+b,0)/corrVals.length : 0;
-
+        const mCorr = corrVals.length>0?corrVals.reduce((a,b)=>a+b,0)/corrVals.length:0;
         return { t, mComp, mFil, mEsp, mCorr };
       });
 
-      // Normaliza 0-100 e cria score composto
-      const maxComp = Math.max(...scores.map(s=>s.mComp)) || 1;
-      const maxFil  = Math.max(...scores.map(s=>s.mFil))  || 1;
-      const maxEsp  = Math.max(...scores.map(s=>s.mEsp))  || 1;
-      const maxCorr = Math.max(...scores.map(s=>s.mCorr)) || 1;
+      const maxComp=Math.max(...scores.map(s=>s.mComp))||1;
+      const maxFil =Math.max(...scores.map(s=>s.mFil)) ||1;
+      const maxEsp =Math.max(...scores.map(s=>s.mEsp)) ||1;
+      const maxCorr=Math.max(...scores.map(s=>s.mCorr))||1;
 
       scores.forEach(s => {
-        s.scoreComp = (s.mComp/maxComp)*100;
-        s.scoreFil  = (s.mFil/maxFil)*100;
-        s.scoreEsp  = (s.mEsp/maxEsp)*100;
-        s.scoreCorr = (s.mCorr/maxCorr)*100;
-        s.total     = (s.scoreComp + s.scoreFil + s.scoreEsp + s.scoreCorr) / 4;
+        s.scoreComp=(s.mComp/maxComp)*100;
+        s.scoreFil =(s.mFil/maxFil)*100;
+        s.scoreEsp =(s.mEsp/maxEsp)*100;
+        s.scoreCorr=(s.mCorr/maxCorr)*100;
+        s.total    =(s.scoreComp+s.scoreFil+s.scoreEsp+s.scoreCorr)/4;
       });
-      scores.sort((a,b) => b.total - a.total);
+      scores.sort((a,b)=>b.total-a.total);
 
-      const rankHead = [['#', 'Tratamento', 'Comp. Espiga\n(cm)', 'N° Fileiras', 'Esp. Espiga\n(mm)', 'PMG Corrigido\n14% (g)', 'Score\nGlobal (%)']];
-      const rankBody = scores.map((s,i) => [
-        `${i+1}°`,
-        s.t,
-        s.mComp>0 ? s.mComp.toFixed(2) : '—',
-        s.mFil>0  ? s.mFil.toFixed(2)  : '—',
-        s.mEsp>0  ? s.mEsp.toFixed(2)  : '—',
-        s.mCorr>0 ? s.mCorr.toFixed(2) : '—',
-        s.total.toFixed(1)+'%',
-      ]);
+      // Desenha ranking manualmente para mais controle visual
+      const rankStartY = 26;
+      const rankH = 14;
+      const rankW = 269;
+      const rankX = 14;
 
-      doc.autoTable({
-        head: rankHead,
-        body: rankBody,
-        startY: 24, theme:'grid',
-        headStyles:{ fillColor:[45,80,60], textColor:GP, fontStyle:'bold', halign:'center', fontSize:9 },
-        bodyStyles:{ halign:'center', fontSize:9 },
-        columnStyles:{
-          0:{ cellWidth:10, fontStyle:'bold' },
-          1:{ halign:'left', fontStyle:'bold', textColor:[29,106,74], cellWidth:20 },
-          6:{ fontStyle:'bold', textColor:[29,106,74] },
-        },
-        alternateRowStyles:{ fillColor:[245,250,247] },
-        margin:{ left:30, right:30 },
-        willDrawCell(hook) {
-          if(hook.row.index===0 && hook.section==='body'){
-            hook.cell.styles.fillColor=[216,243,220];
-            hook.cell.styles.textColor=[29,53,40];
-            hook.cell.styles.fontStyle='bold';
-            hook.cell.styles.fontSize=10;
-          }
+      // Medalhas
+      const medals = ['🥇','🥈','🥉'];
+
+      scores.forEach((s, i) => {
+        const y = rankStartY + i*(rankH+2);
+        if(y + rankH > 200) return;
+
+        const isFirst = i===0;
+        const rowBg = isFirst ? [216,243,220] : i%2===0 ? [245,250,247] : [255,255,255];
+
+        // Fundo da linha
+        doc.setFillColor(...rowBg);
+        doc.roundedRect(rankX, y, rankW, rankH, 2, 2, 'F');
+        if(isFirst){
+          doc.setDrawColor(...GD);
+          doc.setLineWidth(0.5);
+          doc.roundedRect(rankX, y, rankW, rankH, 2, 2, 'S');
         }
+
+        // Posição
+        doc.setFontSize(isFirst?11:9);
+        doc.setFont('helvetica','bold');
+        doc.setTextColor(isFirst?...GD:[100,100,100]);
+        doc.text(`${i+1}°`, rankX+5, y+rankH*0.65);
+
+        // Nome tratamento
+        doc.setFontSize(isFirst?10:8.5);
+        doc.setTextColor(...(isFirst?GD:[40,40,40]));
+        doc.text(s.t, rankX+18, y+rankH*0.65);
+
+        // Barras de score por parâmetro
+        const barParams = [
+          { label:'Fileiras', score:s.scoreFil,  val:s.mFil,  color:[29,53,40]   },
+          { label:'Comp.',    score:s.scoreComp, val:s.mComp, color:[20,60,100]   },
+          { label:'Esp.',     score:s.scoreEsp,  val:s.mEsp,  color:[100,40,10]   },
+          { label:'PMG Corr.',score:s.scoreCorr, val:s.mCorr, color:[82,183,136]  },
+        ];
+
+        const barAreaX  = rankX + 38;
+        const barAreaW  = rankW - 80;
+        const barW      = barAreaW / barParams.length - 4;
+
+        barParams.forEach((bp, bi) => {
+          const bx   = barAreaX + bi*(barW+4);
+          const barH = (rankH-6) * (bp.score/100);
+          const barY = y + rankH - 3 - barH;
+
+          // Fundo barra
+          doc.setFillColor(220,220,220);
+          doc.rect(bx, y+3, barW, rankH-6, 'F');
+          // Barra preenchida
+          doc.setFillColor(...bp.color);
+          doc.rect(bx, barY, barW, barH, 'F');
+          // Label
+          doc.setFontSize(5);
+          doc.setTextColor(80,80,80);
+          doc.text(bp.label, bx+barW/2, y+rankH-0.5, {align:'center'});
+          // Valor
+          doc.setFontSize(5.5);
+          doc.setTextColor(...bp.color);
+          doc.text(bp.val>0?bp.val.toFixed(1):'—', bx+barW/2, y+5, {align:'center'});
+        });
+
+        // Score global
+        const scoreX = rankX + rankW - 22;
+        doc.setFontSize(isFirst?11:9);
+        doc.setFont('helvetica','bold');
+        doc.setTextColor(isFirst?...GD:[60,60,60]);
+        doc.text(s.total.toFixed(1)+'%', scoreX, y+rankH*0.65, {align:'right'});
       });
 
-      // Nota metodológica
-      const afterRank = doc.lastAutoTable.finalY + 6;
-      doc.setFontSize(7); doc.setTextColor(150);
-      doc.text('* Score global calculado pela normalização (0–100%) de cada parâmetro em relação ao melhor valor observado, com peso igual para todos os critérios.', 30, afterRank);
+      // Legenda das barras
+      const legY = rankStartY + scores.length*(rankH+2) + 4;
+      if(legY < 200) {
+        doc.setFontSize(6); doc.setFont('helvetica','normal');
+        doc.setTextColor(120,120,120);
+        doc.text('* Score global = média normalizada (0–100%) de Fileiras, Comprimento, Espessura e PMG Corrigido.  Barras mostram score relativo ao melhor valor.', rankX, legY);
+      }
 
       // Numeração
       const totalPg = doc.getNumberOfPages();
