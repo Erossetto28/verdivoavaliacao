@@ -1317,7 +1317,7 @@ function generatePDF() {
         // Posição
         doc.setFontSize(isFirst?11:9);
         doc.setFont('helvetica','bold');
-        doc.setTextColor(isFirst?...GD:[100,100,100]);
+        doc.setTextColor(...(isFirst ? GD : [100,100,100]));
         doc.text(`${i+1}°`, rankX+5, y+rankH*0.65);
 
         // Nome tratamento
@@ -1362,7 +1362,7 @@ function generatePDF() {
         const scoreX = rankX + rankW - 22;
         doc.setFontSize(isFirst?11:9);
         doc.setFont('helvetica','bold');
-        doc.setTextColor(isFirst?...GD:[60,60,60]);
+        doc.setTextColor(...(isFirst ? GD : [60,60,60]));
         doc.text(s.total.toFixed(1)+'%', scoreX, y+rankH*0.65, {align:'right'});
       });
 
