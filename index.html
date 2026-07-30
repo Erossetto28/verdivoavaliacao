@@ -1297,7 +1297,7 @@ function generatePDF() {
         'PMG Corr.\n14% (g)', 'Score\nGlobal (%)'
       ]];
       const rankBody = scores.map((s,i) => [
-        i===0?'1° 🥇':i===1?'2° 🥈':i===2?'3° 🥉':`${i+1}°`,
+        i===0?'1° *':i===1?'2°':i===2?'3°':`${i+1}°`,
         s.t,
         s.mFil>0  ? s.mFil.toFixed(2)  : '—',
         s.mComp>0 ? s.mComp.toFixed(2) : '—',
