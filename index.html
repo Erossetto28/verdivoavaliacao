@@ -297,12 +297,45 @@
 <div id="screen-pop" class="screen">
   <button class="back-btn" onclick="goTo('screen-mode')">← Voltar</button>
   <div class="screen-title" id="pop-proto-name"></div>
-  <div class="screen-sub">População de plantas por tratamento (pl/ha)</div>
+  <div class="screen-sub">Espaçamento e população por tratamento</div>
 
+  <!-- ESPAÇAMENTO -->
+  <div class="card" style="margin-bottom:1rem">
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.85rem;margin-bottom:0.75rem;color:var(--dark)">📐 Espaçamento entre linhas</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;align-items:end">
+      <div>
+        <div class="trat-rep-label" style="margin-bottom:0.4rem">Espaçamento (m)</div>
+        <input type="number" step="0.01" inputmode="decimal" id="espacamento-input"
+          class="proto-input" style="width:100%" placeholder="Ex: 0.50"
+          oninput="onEspacamentoChange()">
+      </div>
+      <div style="background:var(--verde-pale);border:1.5px solid var(--verde-light);border-radius:8px;padding:0.65rem 1rem">
+        <div class="trat-rep-label" style="color:var(--verde);margin-bottom:0.2rem">Metros lineares/ha</div>
+        <div id="metros-lineares" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;color:var(--verde)">—</div>
+        <div style="font-size:0.62rem;color:var(--gray)">= 10.000 ÷ espaçamento</div>
+      </div>
+    </div>
+
+    <!-- TOGGLE ESPIGAS VIÁVEIS -->
+    <div style="margin-top:0.85rem;border-top:1px solid var(--border);padding-top:0.85rem">
+      <div class="trat-rep-label" style="margin-bottom:0.5rem">A população já considera apenas espigas viáveis?</div>
+      <div style="display:flex;gap:0.5rem">
+        <button class="trat-count-btn" id="btn-pop-nao" onclick="setPopViavel(false)">Não — aplicar fator 0,9</button>
+        <button class="trat-count-btn" id="btn-pop-sim" onclick="setPopViavel(true)">Sim — usar população direta</button>
+      </div>
+      <div id="pop-viavel-info" style="font-size:0.68rem;color:var(--gray);margin-top:0.4rem">—</div>
+    </div>
+
+    <div style="margin-top:0.75rem;background:var(--bg2);border-radius:6px;padding:0.6rem 0.85rem;font-size:0.7rem;color:var(--gray)" id="formula-display">
+      —
+    </div>
+  </div>
+
+  <!-- POPULAÇÕES -->
   <div class="table-wrapper" style="margin-bottom:1rem">
     <div class="table-toolbar">
-      <span class="table-label">Populações</span>
-      <span style="font-size:0.7rem;color:var(--gray)">Editável — salva automaticamente</span>
+      <span class="table-label">Populações por Tratamento</span>
+      <span id="pop-media-label" style="font-size:0.7rem;color:var(--verde);font-family:'Syne',sans-serif;font-weight:700">—</span>
     </div>
     <div class="table-scroll">
       <table class="data-table" id="popTable">
@@ -313,6 +346,12 @@
           </tr>
         </thead>
         <tbody id="popTbody"></tbody>
+        <tfoot>
+          <tr style="background:var(--dark)">
+            <td style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.78rem;color:var(--verde-light);padding-left:0.85rem">MÉDIA</td>
+            <td style="text-align:center;font-family:'Syne',sans-serif;font-weight:800;font-size:0.9rem;color:var(--verde-pale)" id="pop-media-cell">—</td>
+          </tr>
+        </tfoot>
       </table>
     </div>
   </div>
@@ -428,7 +467,7 @@
         <div class="trat-rep-label" style="margin-bottom:0.25rem;color:var(--verde-light)">Produtividade Estimada (sc/ha)</div>
         <div id="colh-produtividade" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.4rem;color:var(--verde-pale)">—</div>
         <div id="colh-pop-info" style="font-size:0.65rem;color:#9ca3af;margin-top:0.2rem">—</div>
-        <div style="font-size:0.65rem;color:#6b7280;margin-top:0.15rem">Fórmula: (Peso 8 Esp. Corr. ÷ 8) × População ÷ 60.000</div>
+        <div style="font-size:0.65rem;color:#6b7280;margin-top:0.15rem">Fórmula: (P8E_corr ÷ (8 ÷ (Pop_média × 0,9 ÷ mL))) × mL ÷ 60.000</div>
       </div>
     </div>
   </div>
@@ -460,12 +499,147 @@ function getPopulacao(proto, trat) {
   return POPULACAO[proto]?.[trat] || null;
 }
 
+function getPopViavel(proto) {
+  return allData[proto]?.config?.popViavel === true;
+}
+
+function setPopViavel(val) {
+  document.getElementById('btn-pop-sim').classList.toggle('active',  val);
+  document.getElementById('btn-pop-nao').classList.toggle('active', !val);
+  updatePopViavelInfo();
+  const key = protoKey(currentProto);
+  firebase.set(firebase.ref(firebase.db, `protocolos/${key}/config/popViavel`), val)
+    .then(() => {
+      if (!allData[currentProto]) allData[currentProto] = {};
+      if (!allData[currentProto].config) allData[currentProto].config = {};
+      allData[currentProto].config.popViavel = val;
+      showToast('Configuração salva ✓');
+      updatePopMediaLabel();
+    }).catch(() => showToast('⚠ Erro ao salvar'));
+}
+
+function updatePopViavelInfo() {
+  const viavel = getPopViavel(currentProto);
+  const infoEl = document.getElementById('pop-viavel-info');
+  const frmEl  = document.getElementById('formula-display');
+  if (!infoEl || !frmEl) return;
+  if (viavel) {
+    infoEl.textContent = 'A população inserida já representa apenas espigas viáveis — fator 0,9 não será aplicado.';
+    frmEl.innerHTML = '<strong>Fórmula:</strong> (P8E_corr ÷ (8 ÷ (Pop_média ÷ mL))) × mL ÷ 60.000';
+  } else {
+    infoEl.textContent = 'A população total será multiplicada por 0,9 para estimar as espigas viáveis.';
+    frmEl.innerHTML = '<strong>Fórmula:</strong> (P8E_corr ÷ (8 ÷ (Pop_média × 0,9 ÷ mL))) × mL ÷ 60.000';
+  }
+}
+
+function getFatorViavel(proto) {
+  return getPopViavel(proto) ? 1.0 : 0.9;
+}
+
+// ══════════════════════════════════════════════
+// ESPAÇAMENTO E METROS LINEARES
+// ══════════════════════════════════════════════
+function getEspacamento(proto) {
+  const custom = allData[proto]?.config?.espacamento;
+  return custom ? parseFloat(custom) : null;
+}
+
+function getMetrosLineares(proto) {
+  const esp = getEspacamento(proto);
+  return esp ? 10000 / esp : null;
+}
+
+function getPopMedia(proto) {
+  const tratamentos = getTratamentos();
+  const vals = tratamentos.map(t => getPopulacao(proto, t)).filter(v => v !== null);
+  return vals.length > 0 ? vals.reduce((a,b) => a+b, 0) / vals.length : null;
+}
+
+function calcProdutividadeNova(p8eCorr, proto) {
+  const mL     = getMetrosLineares(proto);
+  const popMed = getPopMedia(proto);
+  const fator  = getFatorViavel(proto);
+  if (!mL || !popMed || !p8eCorr) return null;
+  const plantasPorMetro = (popMed * fator) / mL;
+  const metrosPorEspiga = 8 / plantasPorMetro;
+  const pesoPorMetro    = p8eCorr / metrosPorEspiga;
+  return (pesoPorMetro * mL) / 60000;
+}
+
+let espSaveTimer;
+function onEspacamentoChange() {
+  const val = document.getElementById('espacamento-input').value;
+  const esp = parseFloat(val);
+  const mlEl = document.getElementById('metros-lineares');
+  if (!isNaN(esp) && esp > 0) {
+    const mL = 10000 / esp;
+    mlEl.textContent = mL.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  } else {
+    mlEl.textContent = '—';
+  }
+
+  clearTimeout(espSaveTimer);
+  espSaveTimer = setTimeout(() => {
+    const key = protoKey(currentProto);
+    firebase.set(
+      firebase.ref(firebase.db, `protocolos/${key}/config/espacamento`),
+      val !== '' ? parseFloat(val) : null
+    ).then(() => {
+      if (!allData[currentProto]) allData[currentProto] = {};
+      if (!allData[currentProto].config) allData[currentProto].config = {};
+      allData[currentProto].config.espacamento = val !== '' ? parseFloat(val) : null;
+      showToast('Espaçamento salvo ✓');
+      updatePopMediaLabel();
+    }).catch(() => showToast('⚠ Erro ao salvar'));
+  }, 1500);
+}
+
+function updatePopMediaLabel() {
+  const popMed = getPopMedia(currentProto);
+  const mL     = getMetrosLineares(currentProto);
+  const labelEl = document.getElementById('pop-media-label');
+  const cellEl  = document.getElementById('pop-media-cell');
+
+  if (popMed) {
+    const txt = mL
+      ? `Média: ${Math.round(popMed).toLocaleString('pt-BR')} pl/ha · ${(popMed * getFatorViavel(currentProto) / mL).toFixed(2)} pl/m`
+      : `Média: ${Math.round(popMed).toLocaleString('pt-BR')} pl/ha`;
+    if (labelEl) labelEl.textContent = txt;
+    if (cellEl)  cellEl.textContent  = Math.round(popMed).toLocaleString('pt-BR') + ' pl/ha';
+  } else {
+    if (labelEl) labelEl.textContent = '—';
+    if (cellEl)  cellEl.textContent  = '—';
+  }
+}
+
 // ══════════════════════════════════════════════
 // TELA DE POPULAÇÕES
 // ══════════════════════════════════════════════
 function renderPopScreen() {
   document.getElementById('pop-proto-name').textContent = currentProto || '—';
   if (!currentProto) return;
+
+  // Carrega toggle espigas viáveis
+  const viavel = getPopViavel(currentProto);
+  const btnSim = document.getElementById('btn-pop-sim');
+  const btnNao = document.getElementById('btn-pop-nao');
+  if (btnSim && btnNao) {
+    btnSim.classList.toggle('active',  viavel);
+    btnNao.classList.toggle('active', !viavel);
+  }
+  updatePopViavelInfo();
+
+  // Carrega espaçamento
+  const esp     = getEspacamento(currentProto);
+  const espInput = document.getElementById('espacamento-input');
+  const mlEl     = document.getElementById('metros-lineares');
+  espInput.value = esp !== null ? esp : '';
+  if (esp) {
+    const mL = 10000 / esp;
+    mlEl.textContent = Math.round(mL).toLocaleString('pt-BR');
+  } else {
+    mlEl.textContent = '—';
+  }
 
   const tratamentos = getTratamentos();
   const tbody = document.getElementById('popTbody');
@@ -486,10 +660,11 @@ function renderPopScreen() {
     tbody.appendChild(tr);
   });
 
-  // Atualiza sub-label no botão da tela de modo
+  updatePopMediaLabel();
+
   const preenchidos = tratamentos.filter(t => getPopulacao(currentProto, t) !== null).length;
   const subEl = document.getElementById('mode-pop-sub');
-  if (subEl) subEl.textContent = `${preenchidos} / ${tratamentos.length} tratamentos com população definida`;
+  if (subEl) subEl.textContent = `${preenchidos} / ${tratamentos.length} tratamentos · Espaçamento: ${esp ? esp+'m' : 'não definido'}`;
 }
 
 let popSaveTimer;
@@ -510,7 +685,7 @@ function onPopChange(el) {
       if (!allData[currentProto].populacao) allData[currentProto].populacao = {};
       allData[currentProto].populacao[t] = val !== '' ? parseFloat(val) : null;
       showToast(`${t} salvo ✓`);
-      renderPopScreen(); // atualiza sub-label
+      renderPopScreen();
     }).catch(() => showToast('⚠ Erro ao salvar'));
   }, 1500);
 }
@@ -754,14 +929,21 @@ function calcPeso8Corrigido(peso8, umidade) {
 function calcProdutividade(peso8Corr) {
   const el  = document.getElementById('colh-produtividade');
   const inf = document.getElementById('colh-pop-info');
-  const pop = getPopulacao(currentProto, currentTrat);
-  if (peso8Corr !== null && pop !== null) {
-    const prod = (peso8Corr / 8) * pop / 60000;
-    el.textContent = prod.toFixed(2) + ' sc/ha';
-    inf.textContent = `População: ${pop.toLocaleString('pt-BR')} plantas/ha`;
+  const mL     = getMetrosLineares(currentProto);
+  const popMed = getPopMedia(currentProto);
+
+  if (peso8Corr !== null && mL && popMed) {
+    const prod = calcProdutividadeNova(peso8Corr, currentProto);
+    const plantasPorMetro = (popMed * 0.9) / mL;
+    el.textContent = prod !== null ? prod.toFixed(2) + ' sc/ha' : '—';
+    inf.textContent = `Pop. média: ${Math.round(popMed).toLocaleString('pt-BR')} pl/ha · ${plantasPorMetro.toFixed(2)} pl/m · ${Math.round(mL).toLocaleString('pt-BR')} m/ha`;
   } else {
     el.textContent = '—';
-    inf.textContent = pop ? `População: ${pop.toLocaleString('pt-BR')} plantas/ha` : 'População não cadastrada para este protocolo';
+    const missing = [];
+    if (!mL) missing.push('espaçamento');
+    if (!popMed) missing.push('população');
+    if (!peso8Corr) missing.push('P8E corrigido');
+    inf.textContent = `Faltando: ${missing.join(', ')}`;
   }
 }
 
@@ -1173,6 +1355,16 @@ function generatePDF() {
       const dateStr = now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
       const d = allData[currentProto]||{};
       const tratamentos = getTratamentos();
+      // Helper produtividade nova fórmula
+      const mLpdf   = getMetrosLineares(currentProto);
+      const popMedpdf = getPopMedia(currentProto);
+      function prodNovaPDF(p8eCorr) {
+        if (!p8eCorr || !mLpdf || !popMedpdf) return null;
+        const plm = (popMedpdf * 0.9) / mLpdf;
+        const mpe = 8 / plm;
+        return (p8eCorr / mpe) * mLpdf / 60000;
+      }
+
       const comRep = hasRep();
       const repList = comRep ? REPS : ['R1'];
 
@@ -1349,6 +1541,113 @@ function generatePDF() {
         doc.text(`Verdivo — ${currentProto} · ${t}`, 14, 206);
       });
 
+      // ══ PÁGINA: PMG ══
+      doc.addPage('a4','landscape');
+      doc.setFillColor(...LBG); doc.rect(0,0,297,210,'F');
+      doc.setFillColor(...GD); doc.rect(0,0,297,18,'F');
+      doc.setFillColor(...GM); doc.rect(0,18,5,192,'F');
+      doc.setFontSize(11); doc.setFont('helvetica','bold');
+      doc.setTextColor(...GP);
+      doc.text(`${currentProto}  ·  PMG — PESO DE MIL GRAOS`, 14, 12);
+      doc.setFontSize(7); doc.setFont('helvetica','normal');
+      doc.setTextColor(...GM); doc.text(dateStr, 248, 12);
+
+      if (comRep) {
+        // Com repetição: tabela PMG bruto + PMG corrigido por rep
+        const pmgHead = [['Tratamento',
+          ...repList.map(r=>`${r}\nPMG (g)`),
+          ...repList.map(r=>`${r}\nUmid (%)`),
+          ...repList.map(r=>`${r}\nPMG Corr. (g)`),
+          'MED PMG\nCorr. (g)'
+        ]];
+        const pmgBody = tratamentos.map(t => {
+          const pmgCorrs = repList.map(r => {
+            const cd=d.colheita?.[t]?.[r]||{};
+            const pm=parseFloat(cd.peso), u=parseFloat(cd.umidade);
+            return (!isNaN(pm)&&!isNaN(u)&&u<100) ? pm*(100-u)/(100-14) : null;
+          });
+          const medPMG = pmgCorrs.filter(v=>v!==null);
+          const medPMGVal = medPMG.length>0 ? medPMG.reduce((a,b)=>a+b,0)/medPMG.length : null;
+          return [
+            t,
+            ...repList.map(r => { const cd=d.colheita?.[t]?.[r]||{}; return cd.peso||'—'; }),
+            ...repList.map(r => { const cd=d.colheita?.[t]?.[r]||{}; return cd.umidade||'—'; }),
+            ...pmgCorrs.map(v => v!==null?v.toFixed(2):'—'),
+            medPMGVal!==null ? medPMGVal.toFixed(2) : '—',
+          ];
+        });
+
+        doc.autoTable({
+          head: pmgHead,
+          body: pmgBody,
+          startY: 24, theme:'grid',
+          headStyles:{ fillColor:GD, textColor:GP, fontStyle:'bold', halign:'center', fontSize:7 },
+          bodyStyles:{ halign:'center', fontSize:8 },
+          columnStyles:{
+            0:{ halign:'left', fontStyle:'bold', textColor:[29,106,74] },
+            [1+repList.length*2+repList.length]:{ fillColor:[216,243,220], textColor:[29,106,74], fontStyle:'bold' },
+          },
+          alternateRowStyles:{ fillColor:[245,250,247] },
+          margin:{ left:14, right:14 },
+          willDrawCell(hook) {
+            // Destaca colunas PMG Corrigido
+            const firstCorrCol = 1 + repList.length * 2;
+            const lastCorrCol  = 1 + repList.length * 3;
+            if(hook.section==='body' && hook.column.index>=firstCorrCol && hook.column.index<lastCorrCol){
+              hook.cell.styles.fillColor=[240,250,244];
+              hook.cell.styles.textColor=[29,106,74];
+            }
+          }
+        });
+
+        // Resumo médio PMG por tratamento
+        const afterPMG = doc.lastAutoTable.finalY + 5;
+        if(afterPMG < 180) {
+          const pmgResHead = [['Tratamento', 'PMG Medio (g)', 'Umidade Media (%)', 'PMG Corrigido Medio (g)']];
+          const pmgResBody = tratamentos.map(t => {
+            const pmgVals=[], umVals=[], corrVals=[];
+            repList.forEach(r => {
+              const cd=d.colheita?.[t]?.[r]||{};
+              const pm=parseFloat(cd.peso), u=parseFloat(cd.umidade);
+              if(!isNaN(pm)) pmgVals.push(pm);
+              if(!isNaN(u))  umVals.push(u);
+              if(!isNaN(pm)&&!isNaN(u)&&u<100) corrVals.push(pm*(100-u)/(100-14));
+            });
+            const medPMG  = pmgVals.length>0  ? (pmgVals.reduce((a,b)=>a+b,0)/pmgVals.length).toFixed(2)   : '—';
+            const medUm   = umVals.length>0   ? (umVals.reduce((a,b)=>a+b,0)/umVals.length).toFixed(1)     : '—';
+            const medCorr = corrVals.length>0 ? (corrVals.reduce((a,b)=>a+b,0)/corrVals.length).toFixed(2) : '—';
+            return [t, medPMG, medUm, medCorr];
+          });
+          doc.autoTable({
+            head: pmgResHead, body: pmgResBody, startY: afterPMG, theme:'grid',
+            headStyles:{ fillColor:[29,53,40], textColor:GP, fontStyle:'bold', halign:'center', fontSize:9 },
+            bodyStyles:{ halign:'center', fontSize:9 },
+            columnStyles:{ 0:{halign:'left',fontStyle:'bold',textColor:[29,106,74]}, 3:{fillColor:[216,243,220],textColor:[29,106,74],fontStyle:'bold'} },
+            alternateRowStyles:{ fillColor:[245,250,247] }, margin:{ left:40, right:40 },
+          });
+          const fY = doc.lastAutoTable.finalY + 3;
+          doc.setFontSize(6.5); doc.setTextColor(150);
+          doc.text('Correcao: PMG x (100 - Umidade) / (100 - 14)', 40, fY);
+        }
+      } else {
+        // Sem repetição
+        const pmgHead = [['Tratamento','PMG (g)','Umidade (%)','PMG Corrigido (g)']];
+        const pmgBody = tratamentos.map(t => {
+          const cd=d.colheita?.[t]?.['R1']||{};
+          const pm=parseFloat(cd.peso), u=parseFloat(cd.umidade);
+          const corr=(!isNaN(pm)&&!isNaN(u)&&u<100)?(pm*(100-u)/(100-14)).toFixed(2):'—';
+          return [t, cd.peso||'—', cd.umidade||'—', corr];
+        });
+        doc.autoTable({ head:pmgHead, body:pmgBody, startY:24, theme:'grid',
+          headStyles:{ fillColor:GD, textColor:GP, fontStyle:'bold', halign:'center', fontSize:9 },
+          bodyStyles:{ halign:'center', fontSize:9 },
+          columnStyles:{ 0:{halign:'left',fontStyle:'bold',textColor:[29,106,74]}, 3:{fillColor:[216,243,220],textColor:[29,106,74],fontStyle:'bold'} },
+          alternateRowStyles:{ fillColor:[245,250,247] }, margin:{ left:60, right:60 } });
+        const fY = doc.lastAutoTable.finalY + 3;
+        doc.setFontSize(6.5); doc.setTextColor(150);
+        doc.text('Correcao: PMG x (100 - Umidade) / (100 - 14)', 60, fY);
+      }
+
       // ══ PÁGINA: COLHEITA ══
       doc.addPage('a4','landscape');
       doc.setFillColor(...LBG); doc.rect(0,0,297,210,'F');
@@ -1368,14 +1667,14 @@ function generatePDF() {
             const p8=parseFloat(cd.peso8), u=parseFloat(cd.umidade);
             const p8corr = (!isNaN(p8)&&!isNaN(u)&&u<100) ? (p8*(100-u)/(100-14)).toFixed(2) : '—';
             const pop = getPopulacao(currentProto, t);
-            const prod = (p8corr!=='—' && pop) ? ((parseFloat(p8corr)/8)*pop/60000).toFixed(2) : '—';
+            const p8cNum = p8corr!=='—' ? parseFloat(p8corr) : null; const prod = p8cNum ? (prodNovaPDF(p8cNum)||0).toFixed(2) : '—';
             return [t, cd.peso8||'—', cd.umidade||'—', p8corr, prod];
           });
           const prodVals = tratamentos.map(t => {
             const cd=d.colheita?.[t]?.[r]||{};
             const p8=parseFloat(cd.peso8),u=parseFloat(cd.umidade);
             const pop=getPopulacao(currentProto,t);
-            return (!isNaN(p8)&&!isNaN(u)&&u<100&&pop)?(p8*(100-u)/(100-14)/8)*pop/60000:null;
+            const p8c=(!isNaN(p8)&&!isNaN(u)&&u<100)?p8*(100-u)/(100-14):null; return p8c?prodNovaPDF(p8c):null;
           }).filter(v=>v!==null);
           const medProd = prodVals.length>0?(prodVals.reduce((a,b)=>a+b,0)/prodVals.length).toFixed(2):'—';
           rows.push(['MÉD','—','—','—', medProd]);
@@ -1409,6 +1708,7 @@ function generatePDF() {
 
         const afterColh = doc.lastAutoTable.finalY + 5;
         if(afterColh < 180) {
+          const popMedVal = popMedpdf ? Math.round(popMedpdf) : null;
           const prodResHead = [['Tratamento','Pop. (pl/ha)','MED P8E Corr. (g)','Produtividade Media (sc/ha)']];
           const prodResBody = tratamentos.map(t => {
             const pop = getPopulacao(currentProto, t);
@@ -1418,19 +1718,32 @@ function generatePDF() {
               return (!isNaN(p8)&&!isNaN(u)&&u<100)?p8*(100-u)/(100-14):null;
             }).filter(v=>v!==null);
             const medP8E = pv.length>0?pv.reduce((a,b)=>a+b,0)/pv.length:null;
-            const prod = (medP8E!==null&&pop)?(medP8E/8)*pop/60000:null;
+            const prod = medP8E!==null ? prodNovaPDF(medP8E) : null;
             return [t, pop?pop.toLocaleString('pt-BR'):'—', medP8E!==null?medP8E.toFixed(2):'—', prod!==null?prod.toFixed(2):'—'];
           });
+          // Linha de média das populações no rodapé
+          prodResBody.push(['MEDIA POP.', popMedVal?popMedVal.toLocaleString('pt-BR'):'—', '—', '—']);
+
           doc.autoTable({
             head: prodResHead, body: prodResBody, startY: afterColh, theme:'grid',
             headStyles:{ fillColor:[29,53,40], textColor:GP, fontStyle:'bold', halign:'center', fontSize:8 },
             bodyStyles:{ halign:'center', fontSize:8 },
-            columnStyles:{ 0:{halign:'left',fontStyle:'bold',textColor:[29,106,74]}, 3:{fillColor:[216,243,220],textColor:[29,106,74],fontStyle:'bold'} },
-            alternateRowStyles:{ fillColor:[245,250,247] }, margin:{ left:30, right:30 },
+            columnStyles:{
+              0:{ halign:'left', fontStyle:'bold', textColor:[29,106,74] },
+              3:{ fillColor:[216,243,220], textColor:[29,106,74], fontStyle:'bold' }
+            },
+            alternateRowStyles:{ fillColor:[245,250,247] }, margin:{ left:25, right:25 },
+            willDrawCell(hook) {
+              if(hook.section==='body' && hook.row.index===prodResBody.length-1){
+                hook.cell.styles.fillColor=[29,53,40];
+                hook.cell.styles.textColor=[216,243,220];
+                hook.cell.styles.fontStyle='bold';
+              }
+            }
           });
           const fY = doc.lastAutoTable.finalY + 3;
           doc.setFontSize(6.5); doc.setTextColor(150);
-          doc.text('Formula: (P8E Corrigido 14% / 8) x Populacao (pl/ha) / 60.000  |  Correcao: P8E x (100 - Umidade) / (100 - 14)', 30, fY);
+          doc.text(`Formula: (P8E_corr / (8 / (PopMed x 0,9 / mL))) x mL / 60.000  |  PopMed=${Math.round(popMedpdf||0).toLocaleString('pt-BR')} pl/ha · mL=${Math.round(mLpdf||0).toLocaleString('pt-BR')} m/ha`, 25, fY);
         }
       } else {
         const colhHead = [['Tratamento','P8E (g)','PMG (g)','Umidade (%)','P8E Corr. (g)','PMG Corr. (g)','Pop. (pl/ha)','Prod. (sc/ha)']];
@@ -1440,7 +1753,7 @@ function generatePDF() {
           const p8corr = (!isNaN(p8)&&!isNaN(u)&&u<100)?(p8*(100-u)/(100-14)):null;
           const pmcorr = (!isNaN(pm)&&!isNaN(u)&&u<100)?(pm*(100-u)/(100-14)).toFixed(2):'—';
           const pop = getPopulacao(currentProto, t);
-          const prod = (p8corr!==null&&pop)?((p8corr/8)*pop/60000).toFixed(2):'—';
+          const prod = p8corr!==null ? (prodNovaPDF(p8corr)||0).toFixed(2) : '—';
           return [t, cd.peso8||'—', cd.peso||'—', cd.umidade||'—',
             p8corr!==null?p8corr.toFixed(2):'—', pmcorr, pop?pop.toLocaleString('pt-BR'):'—', prod];
         });
@@ -1451,7 +1764,7 @@ function generatePDF() {
           alternateRowStyles:{ fillColor:[245,250,247] }, margin:{ left:14, right:14 } });
         const fY = doc.lastAutoTable.finalY + 3;
         doc.setFontSize(6.5); doc.setTextColor(150);
-        doc.text('Formula: (P8E Corrigido 14% / 8) x Populacao (pl/ha) / 60.000', 14, fY);
+        doc.text(`Formula: (P8E_corr / (8 / (PopMed x 0,9 / mL))) x mL / 60.000  |  PopMed=${Math.round(popMedpdf||0).toLocaleString('pt-BR')} pl/ha · mL=${Math.round(mLpdf||0).toLocaleString('pt-BR')} m/ha`, 14, fY);
       }
 
       // ══ PÁGINA: RANKING ══
@@ -1482,7 +1795,7 @@ function generatePDF() {
         const prodVals = repList.map(r => {
           const cd=d.colheita?.[t]?.[r]||{};
           const p8=parseFloat(cd.peso8),u=parseFloat(cd.umidade);
-          return (!isNaN(p8)&&!isNaN(u)&&u<100&&pop)?(p8*(100-u)/(100-14)/8)*pop/60000:null;
+          const p8c=(!isNaN(p8)&&!isNaN(u)&&u<100)?p8*(100-u)/(100-14):null; return p8c?prodNovaPDF(p8c):null;
         }).filter(v=>v!==null);
         const mProd = prodVals.length>0?prodVals.reduce((a,b)=>a+b,0)/prodVals.length:0;
 
