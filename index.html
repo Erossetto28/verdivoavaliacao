@@ -1253,7 +1253,8 @@ function generatePDF() {
 
       // ══ PÁGINA: RANKING ══
       doc.addPage('a4','landscape');
-      doc.setFillColor(...GD); doc.rect(0,0,297,210,'F');
+      doc.setFillColor(...LBG); doc.rect(0,0,297,210,'F');
+      doc.setFillColor(...GD); doc.rect(0,0,297,18,'F');
       doc.setFillColor(...GM); doc.rect(0,18,5,192,'F');
       doc.setFontSize(11); doc.setFont('helvetica','bold');
       doc.setTextColor(...GP);
@@ -1289,89 +1290,113 @@ function generatePDF() {
       });
       scores.sort((a,b)=>b.total-a.total);
 
-      // Desenha ranking manualmente para mais controle visual
-      const rankStartY = 26;
-      const rankH = 14;
-      const rankW = 269;
-      const rankX = 14;
+      // ── TABELA DE RANKING ──
+      const rankHead = [[
+        '#', 'Tratamento',
+        'N° Fileiras', 'Comp. Espiga\n(cm)', 'Esp. Espiga\n(mm)',
+        'PMG Corr.\n14% (g)', 'Score\nGlobal (%)'
+      ]];
+      const rankBody = scores.map((s,i) => [
+        i===0?'1° 🥇':i===1?'2° 🥈':i===2?'3° 🥉':`${i+1}°`,
+        s.t,
+        s.mFil>0  ? s.mFil.toFixed(2)  : '—',
+        s.mComp>0 ? s.mComp.toFixed(2) : '—',
+        s.mEsp>0  ? s.mEsp.toFixed(2)  : '—',
+        s.mCorr>0 ? s.mCorr.toFixed(2) : '—',
+        s.total.toFixed(1)+'%',
+      ]);
 
-      // Medalhas
-      const medals = ['🥇','🥈','🥉'];
-
-      scores.forEach((s, i) => {
-        const y = rankStartY + i*(rankH+2);
-        if(y + rankH > 200) return;
-
-        const isFirst = i===0;
-        const rowBg = isFirst ? [216,243,220] : i%2===0 ? [245,250,247] : [255,255,255];
-
-        // Fundo da linha
-        doc.setFillColor(...rowBg);
-        doc.roundedRect(rankX, y, rankW, rankH, 2, 2, 'F');
-        if(isFirst){
-          doc.setDrawColor(...GD);
-          doc.setLineWidth(0.5);
-          doc.roundedRect(rankX, y, rankW, rankH, 2, 2, 'S');
+      doc.autoTable({
+        head: rankHead,
+        body: rankBody,
+        startY: 24,
+        theme: 'grid',
+        headStyles:{ fillColor:GD, textColor:GP, fontStyle:'bold', halign:'center', fontSize:8.5, cellPadding:3.5 },
+        bodyStyles:{ halign:'center', fontSize:8.5, cellPadding:3 },
+        columnStyles:{
+          0:{ cellWidth:16, fontStyle:'bold', halign:'center' },
+          1:{ halign:'left', fontStyle:'bold', cellWidth:20 },
+          6:{ fontStyle:'bold', textColor:[29,106,74] },
+        },
+        alternateRowStyles:{ fillColor:[245,250,247] },
+        margin:{ left:14, right:14 },
+        willDrawCell(hook) {
+          if(hook.section!=='body') return;
+          const i=hook.row.index;
+          if(i===0){ hook.cell.styles.fillColor=[216,243,220]; hook.cell.styles.textColor=[29,53,40]; hook.cell.styles.fontStyle='bold'; hook.cell.styles.fontSize=9.5; }
+          if(i===1){ hook.cell.styles.fillColor=[235,235,235]; hook.cell.styles.textColor=[40,40,40]; hook.cell.styles.fontStyle='bold'; }
+          if(i===2){ hook.cell.styles.fillColor=[255,243,215]; hook.cell.styles.textColor=[100,60,10]; hook.cell.styles.fontStyle='bold'; }
+          if(i>2 && hook.column.index===6){ hook.cell.styles.textColor=[29,106,74]; hook.cell.styles.fontStyle='bold'; }
         }
-
-        // Posição
-        doc.setFontSize(isFirst?11:9);
-        doc.setFont('helvetica','bold');
-        doc.setTextColor(...(isFirst ? GD : [100,100,100]));
-        doc.text(`${i+1}°`, rankX+5, y+rankH*0.65);
-
-        // Nome tratamento
-        doc.setFontSize(isFirst?10:8.5);
-        doc.setTextColor(...(isFirst?GD:[40,40,40]));
-        doc.text(s.t, rankX+18, y+rankH*0.65);
-
-        // Barras de score por parâmetro
-        const barParams = [
-          { label:'Fileiras', score:s.scoreFil,  val:s.mFil,  color:[29,53,40]   },
-          { label:'Comp.',    score:s.scoreComp, val:s.mComp, color:[20,60,100]   },
-          { label:'Esp.',     score:s.scoreEsp,  val:s.mEsp,  color:[100,40,10]   },
-          { label:'PMG Corr.',score:s.scoreCorr, val:s.mCorr, color:[82,183,136]  },
-        ];
-
-        const barAreaX  = rankX + 38;
-        const barAreaW  = rankW - 80;
-        const barW      = barAreaW / barParams.length - 4;
-
-        barParams.forEach((bp, bi) => {
-          const bx   = barAreaX + bi*(barW+4);
-          const barH = (rankH-6) * (bp.score/100);
-          const barY = y + rankH - 3 - barH;
-
-          // Fundo barra
-          doc.setFillColor(220,220,220);
-          doc.rect(bx, y+3, barW, rankH-6, 'F');
-          // Barra preenchida
-          doc.setFillColor(...bp.color);
-          doc.rect(bx, barY, barW, barH, 'F');
-          // Label
-          doc.setFontSize(5);
-          doc.setTextColor(80,80,80);
-          doc.text(bp.label, bx+barW/2, y+rankH-0.5, {align:'center'});
-          // Valor
-          doc.setFontSize(5.5);
-          doc.setTextColor(...bp.color);
-          doc.text(bp.val>0?bp.val.toFixed(1):'—', bx+barW/2, y+5, {align:'center'});
-        });
-
-        // Score global
-        const scoreX = rankX + rankW - 22;
-        doc.setFontSize(isFirst?11:9);
-        doc.setFont('helvetica','bold');
-        doc.setTextColor(...(isFirst ? GD : [60,60,60]));
-        doc.text(s.total.toFixed(1)+'%', scoreX, y+rankH*0.65, {align:'right'});
       });
 
-      // Legenda das barras
-      const legY = rankStartY + scores.length*(rankH+2) + 4;
-      if(legY < 200) {
-        doc.setFontSize(6); doc.setFont('helvetica','normal');
-        doc.setTextColor(120,120,120);
-        doc.text('* Score global = média normalizada (0–100%) de Fileiras, Comprimento, Espessura e PMG Corrigido.  Barras mostram score relativo ao melhor valor.', rankX, legY);
+      // ── ANÁLISE DO DESTAQUE ──
+      const afterTable = doc.lastAutoTable.finalY + 6;
+      const winner = scores[0];
+
+      // Identifica em quais parâmetros o 1° se destacou
+      const paramNames = { fileiras:'N° Fileiras', comp:'Comprimento de Espiga', esp:'Espessura de Espiga', corr:'PMG Corrigido' };
+      const winnerScores = [
+        { key:'fileiras', score:winner.scoreFil,  val:winner.mFil,  unit:'fileiras', max:maxFil  },
+        { key:'comp',     score:winner.scoreComp, val:winner.mComp, unit:'cm',        max:maxComp },
+        { key:'esp',      score:winner.scoreEsp,  val:winner.mEsp,  unit:'mm',        max:maxEsp  },
+        { key:'corr',     score:winner.scoreCorr, val:winner.mCorr, unit:'g',         max:maxCorr },
+      ];
+
+      const best  = winnerScores.filter(p=>p.score>=99);  // melhor absoluto
+      const great = winnerScores.filter(p=>p.score>=90&&p.score<99);
+      const weak  = winnerScores.filter(p=>p.score<85);
+
+      // Caixa de análise
+      const boxH = Math.min(60, 205 - afterTable);
+      if(boxH > 20) {
+        doc.setFillColor(29,53,40);
+        doc.roundedRect(14, afterTable, 269, boxH, 3, 3, 'F');
+        doc.setFillColor(82,183,136);
+        doc.roundedRect(14, afterTable, 5, boxH, 1, 1, 'F');
+
+        doc.setFontSize(9); doc.setFont('helvetica','bold');
+        doc.setTextColor(216,243,220);
+        doc.text(`Por que ${winner.t} se destacou?`, 24, afterTable+7);
+
+        let textY = afterTable + 14;
+        doc.setFont('helvetica','normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(200,230,210);
+
+        if(best.length>0){
+          const names = best.map(p=>`${paramNames[p.key]} (${p.val.toFixed(2)} ${p.unit})`).join(', ');
+          const lines = doc.splitTextToSize(`• Melhor resultado absoluto em: ${names}.`, 250);
+          doc.text(lines, 24, textY); textY += lines.length*5+2;
+        }
+        if(great.length>0){
+          const names = great.map(p=>`${paramNames[p.key]} (${p.val.toFixed(2)} ${p.unit})`).join(', ');
+          const lines = doc.splitTextToSize(`• Alto desempenho em: ${names}.`, 250);
+          doc.text(lines, 24, textY); textY += lines.length*5+2;
+        }
+        if(weak.length>0){
+          const names = weak.map(p=>`${paramNames[p.key]} (${p.val.toFixed(2)} ${p.unit})`).join(', ');
+          const lines = doc.splitTextToSize(`• Menor desempenho relativo em: ${names} — ponto de atenção para próximos ciclos.`, 250);
+          doc.text(lines, 24, textY); textY += lines.length*5+2;
+        }
+
+        // Comparação com o 2° lugar
+        if(scores.length>1){
+          const runner = scores[1];
+          const diff = winner.total - runner.total;
+          doc.setTextColor(180,220,200);
+          const compLine = `• Vantagem sobre ${runner.t} (2° lugar): ${diff.toFixed(1)} pontos de score global.`;
+          const lines = doc.splitTextToSize(compLine, 250);
+          if(textY + lines.length*5 < afterTable+boxH-3) doc.text(lines, 24, textY);
+        }
+      }
+
+      // Nota metodológica
+      const noteY = afterTable + boxH + 4;
+      if(noteY < 207){
+        doc.setFontSize(6.5); doc.setFont('helvetica','normal');
+        doc.setTextColor(150,150,150);
+        doc.text('* Score global = média normalizada (0–100%) de N° Fileiras, Comprimento, Espessura e PMG Corrigido em relação ao melhor valor observado entre os tratamentos.', 14, noteY);
       }
 
       // Numeração
