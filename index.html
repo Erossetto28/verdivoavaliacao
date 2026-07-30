@@ -260,7 +260,7 @@
   <div class="screen-title" id="mode-proto-name"></div>
   <div class="screen-sub">O que deseja avaliar neste protocolo?</div>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
     <div class="mode-card" onclick="enterMode('morfologia')">
       <div class="mode-icon">🌿</div>
       <div class="mode-label">Morfologia</div>
@@ -275,12 +275,50 @@
     </div>
   </div>
 
+  <!-- Botão Populações -->
+  <div class="mode-card" onclick="goTo('screen-pop')" style="margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem;text-align:left;padding:0.85rem 1.25rem">
+    <div style="font-size:1.5rem">⚙️</div>
+    <div>
+      <div class="mode-label">Populações por Tratamento</div>
+      <div class="mode-sub" id="mode-pop-sub">Ver e editar população de plantas/ha</div>
+    </div>
+  </div>
+
   <div class="pdf-section">
     <div class="pdf-info">
       <div class="pdf-title">📄 Relatório Consolidado</div>
       <div class="pdf-sub">Morfologia + Colheita + Ranking dos tratamentos</div>
     </div>
     <button class="btn-pdf" id="pdfBtn" onclick="generatePDF()">⬇ Baixar PDF</button>
+  </div>
+</div>
+
+<!-- ══ SCREEN POP: POPULAÇÕES ══ -->
+<div id="screen-pop" class="screen">
+  <button class="back-btn" onclick="goTo('screen-mode')">← Voltar</button>
+  <div class="screen-title" id="pop-proto-name"></div>
+  <div class="screen-sub">População de plantas por tratamento (pl/ha)</div>
+
+  <div class="table-wrapper" style="margin-bottom:1rem">
+    <div class="table-toolbar">
+      <span class="table-label">Populações</span>
+      <span style="font-size:0.7rem;color:var(--gray)">Editável — salva automaticamente</span>
+    </div>
+    <div class="table-scroll">
+      <table class="data-table" id="popTable">
+        <thead>
+          <tr>
+            <th>Tratamento</th>
+            <th>População (pl/ha)</th>
+          </tr>
+        </thead>
+        <tbody id="popTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="background:var(--bg2);border-radius:8px;padding:0.85rem 1rem;font-size:0.72rem;color:var(--gray)">
+    💡 Valores pré-carregados dos relatórios de estande. Edite caso necessário — as alterações são salvas no Firebase e ficam visíveis para todos.
   </div>
 </div>
 
@@ -370,10 +408,27 @@
           class="proto-input" style="width:100%" placeholder="Ex: 18.5"
           oninput="onColheitaChange()">
       </div>
+
+      <!-- Peso 8 espigas corrigido -->
       <div style="background:var(--verde-pale);border:1.5px solid var(--verde-light);border-radius:8px;padding:1rem">
-        <div class="trat-rep-label" style="margin-bottom:0.4rem;color:var(--verde)">PMG corrigido para 14% (g)</div>
-        <div id="colh-corrigido" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.4rem;color:var(--verde)">—</div>
-        <div style="font-size:0.65rem;color:var(--gray);margin-top:0.3rem">Fórmula: PMG × (100 − Umidade Inicial) ÷ (100 − 14)</div>
+        <div class="trat-rep-label" style="margin-bottom:0.25rem;color:var(--verde)">Peso 8 Espigas Corrigido 14% (g)</div>
+        <div id="colh-peso8-corr" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.2rem;color:var(--verde)">—</div>
+        <div style="font-size:0.65rem;color:var(--gray);margin-top:0.2rem">Fórmula: Peso 8 Esp. × (100 − Umidade) ÷ (100 − 14)</div>
+      </div>
+
+      <!-- PMG corrigido -->
+      <div style="background:var(--verde-pale);border:1.5px solid var(--verde-light);border-radius:8px;padding:1rem">
+        <div class="trat-rep-label" style="margin-bottom:0.25rem;color:var(--verde)">PMG Corrigido 14% (g)</div>
+        <div id="colh-corrigido" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.2rem;color:var(--verde)">—</div>
+        <div style="font-size:0.65rem;color:var(--gray);margin-top:0.2rem">Fórmula: PMG × (100 − Umidade) ÷ (100 − 14)</div>
+      </div>
+
+      <!-- Produtividade -->
+      <div style="background:var(--dark);border-radius:8px;padding:1rem">
+        <div class="trat-rep-label" style="margin-bottom:0.25rem;color:var(--verde-light)">Produtividade Estimada (sc/ha)</div>
+        <div id="colh-produtividade" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.4rem;color:var(--verde-pale)">—</div>
+        <div id="colh-pop-info" style="font-size:0.65rem;color:#9ca3af;margin-top:0.2rem">—</div>
+        <div style="font-size:0.65rem;color:#6b7280;margin-top:0.15rem">Fórmula: (Peso 8 Esp. Corr. ÷ 8) × População ÷ 60.000</div>
       </div>
     </div>
   </div>
@@ -386,6 +441,80 @@
 <div class="toast" id="toast"></div>
 
 <script>
+// ══════════════════════════════════════════════
+// POPULAÇÃO POR PROTOCOLO × TRATAMENTO
+// ══════════════════════════════════════════════
+const POPULACAO = {
+  'Fabrício Kryzanski': { T1:64444.4, T2:65000.0, T3:65000.0, T4:64444.4, T5:65555.6, T6:65000.0, T7:63888.9 },
+  'Guareschi':          { T1:68666.7, T2:68000.0, T3:67333.3, T4:71333.3, T5:68000.0, T6:68000.0, T7:70000.0 },
+  'Matiotti':           { T1:70000.0, T2:63333.3, T3:66666.7, T4:64000.0, T5:67333.3, T6:64000.0, T7:63333.3 },
+  'Grupo Ruiz':         { T1:61333.3, T2:66666.7, T3:62666.7, T4:65333.3, T5:62666.7, T6:67333.3, T7:62666.7, T8:65333.3, T9:66666.7, T10:63333.3 },
+  'Schicieri':          { T1:63333.3, T2:62000.0, T3:66000.0, T4:62000.0, T5:61333.3, T6:63333.3, T7:64000.0, T8:62000.0, T9:62000.0, T10:61333.3 },
+};
+
+function getPopulacao(proto, trat) {
+  // Primeiro verifica se há valor customizado salvo no Firebase
+  const custom = allData[proto]?.populacao?.[trat];
+  if (custom !== undefined && custom !== null && custom !== '') return parseFloat(custom);
+  // Fallback para tabela padrão dos PDFs
+  return POPULACAO[proto]?.[trat] || null;
+}
+
+// ══════════════════════════════════════════════
+// TELA DE POPULAÇÕES
+// ══════════════════════════════════════════════
+function renderPopScreen() {
+  document.getElementById('pop-proto-name').textContent = currentProto || '—';
+  if (!currentProto) return;
+
+  const tratamentos = getTratamentos();
+  const tbody = document.getElementById('popTbody');
+  tbody.innerHTML = '';
+
+  tratamentos.forEach(t => {
+    const val = getPopulacao(currentProto, t);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${t}</td>
+      <td><input type="number" step="any" inputmode="decimal"
+        class="${val ? 'filled' : ''}"
+        value="${val !== null ? val : ''}"
+        data-trat="${t}"
+        placeholder="Ex: 65000"
+        oninput="onPopChange(this)"
+        style="width:100%;min-width:120px;padding:0.38rem 0.5rem;border:1.5px solid var(--border);border-radius:5px;font-family:'DM Mono',monospace;font-size:0.85rem;text-align:center;background:#fefefe;height:38px;-moz-appearance:textfield"></td>`;
+    tbody.appendChild(tr);
+  });
+
+  // Atualiza sub-label no botão da tela de modo
+  const preenchidos = tratamentos.filter(t => getPopulacao(currentProto, t) !== null).length;
+  const subEl = document.getElementById('mode-pop-sub');
+  if (subEl) subEl.textContent = `${preenchidos} / ${tratamentos.length} tratamentos com população definida`;
+}
+
+let popSaveTimer;
+function onPopChange(el) {
+  const t   = el.dataset.trat;
+  const val = el.value;
+  el.classList.toggle('filled', val !== '');
+
+  // Salva no Firebase sob protocolos/<key>/populacao/<T>
+  clearTimeout(popSaveTimer);
+  popSaveTimer = setTimeout(() => {
+    const key = protoKey(currentProto);
+    firebase.set(
+      firebase.ref(firebase.db, `protocolos/${key}/populacao/${t}`),
+      val !== '' ? parseFloat(val) : null
+    ).then(() => {
+      if (!allData[currentProto]) allData[currentProto] = {};
+      if (!allData[currentProto].populacao) allData[currentProto].populacao = {};
+      allData[currentProto].populacao[t] = val !== '' ? parseFloat(val) : null;
+      showToast(`${t} salvo ✓`);
+      renderPopScreen(); // atualiza sub-label
+    }).catch(() => showToast('⚠ Erro ao salvar'));
+  }, 1500);
+}
+
 // ══════════════════════════════════════════════
 // CONSTANTS
 // ══════════════════════════════════════════════
@@ -534,8 +663,8 @@ function selectProtocol(name) {
   currentTrat = 'T1';
   currentRep  = 'R1';
   document.getElementById('mode-proto-name').textContent = name;
-  goTo('screen-mode');
   subscribeToProto(name);
+  goTo('screen-mode');
 }
 
 function enterMode(mode) {
@@ -587,6 +716,8 @@ function loadColheitaFields() {
   document.getElementById('colh-peso').value    = peso;
   document.getElementById('colh-umidade').value = umidade;
   calcCorrigido(peso, umidade);
+  const peso8Corr = calcPeso8Corrigido(peso8, umidade);
+  calcProdutividade(peso8Corr);
   document.getElementById('syncStatusColh').textContent = 'Sincronizado ✓';
 }
 
@@ -604,12 +735,46 @@ function calcCorrigido(peso, umidade) {
   }
 }
 
+function calcPeso8Corrigido(peso8, umidade) {
+  const p = parseFloat(peso8);
+  const u = parseFloat(umidade);
+  const el = document.getElementById('colh-peso8-corr');
+  if (!isNaN(p) && !isNaN(u) && u < 100) {
+    const corr = p * (100 - u) / (100 - 14);
+    el.textContent = corr.toFixed(2) + ' g';
+    el.style.color = 'var(--verde)';
+    return corr;
+  } else {
+    el.textContent = '—';
+    el.style.color = 'var(--gray)';
+    return null;
+  }
+}
+
+function calcProdutividade(peso8Corr) {
+  const el  = document.getElementById('colh-produtividade');
+  const inf = document.getElementById('colh-pop-info');
+  const pop = getPopulacao(currentProto, currentTrat);
+  if (peso8Corr !== null && pop !== null) {
+    const prod = (peso8Corr / 8) * pop / 60000;
+    el.textContent = prod.toFixed(2) + ' sc/ha';
+    inf.textContent = `População: ${pop.toLocaleString('pt-BR')} plantas/ha`;
+  } else {
+    el.textContent = '—';
+    inf.textContent = pop ? `População: ${pop.toLocaleString('pt-BR')} plantas/ha` : 'População não cadastrada para este protocolo';
+  }
+}
+
 let colhSaveTimer;
 function onColheitaChange() {
   const peso8   = document.getElementById('colh-peso8').value;
   const peso    = document.getElementById('colh-peso').value;
   const umidade = document.getElementById('colh-umidade').value;
+
   calcCorrigido(peso, umidade);
+  const peso8Corr = calcPeso8Corrigido(peso8, umidade);
+  calcProdutividade(peso8Corr);
+
   document.getElementById('syncStatusColh').textContent = 'Salvando...';
 
   const savedTrat  = currentTrat;
@@ -646,6 +811,8 @@ function clearCurrentColheita() {
   document.getElementById('colh-peso').value = '';
   document.getElementById('colh-umidade').value = '';
   document.getElementById('colh-corrigido').textContent = '—';
+  document.getElementById('colh-peso8-corr').textContent = '—';
+  document.getElementById('colh-produtividade').textContent = '—';
   showToast('Limpo ✓');
 }
 
@@ -690,8 +857,9 @@ function subscribeToProto(name) {
       const onSelScreen  = document.getElementById('screen-sel').classList.contains('active');
       const onEvalScreen = document.getElementById('screen-eval').classList.contains('active');
       const onColhScreen = document.getElementById('screen-colheita').classList.contains('active');
+      const onPopScreen  = document.getElementById('screen-pop').classList.contains('active');
       if (onSelScreen)  renderOverview();
-      // Nas telas de avaliação: apenas atualiza o texto de status, sem recriar a tabela
+      if (onPopScreen)  renderPopScreen();
       if (onEvalScreen) document.getElementById('syncStatus').textContent = 'Sincronizado ✓';
       if (onColhScreen) document.getElementById('syncStatusColh').textContent = 'Sincronizado ✓';
     }
@@ -708,6 +876,15 @@ function goTo(id) {
   window.scrollTo(0,0);
   if (id === 'screen-sel')  { renderTratRepGrid(); renderOverview(); }
   if (id === 'screen-mode') { updateModeScreenPct(); }
+  if (id === 'screen-pop')  {
+    renderPopScreen();
+    // Re-tenta após 500ms caso os dados do Firebase ainda não tenham chegado
+    setTimeout(() => {
+      if (document.getElementById('screen-pop').classList.contains('active')) {
+        renderPopScreen();
+      }
+    }, 500);
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -939,12 +1116,6 @@ function clearCurrentEval() {
 // ══════════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════════
-function goTo(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  window.scrollTo(0,0);
-  if (id === 'screen-sel') { renderTratRepGrid(); renderOverview(); }
-}
 
 // ══════════════════════════════════════════════
 // PDF HELPERS
@@ -1185,31 +1356,32 @@ function generatePDF() {
       doc.setFillColor(...GM); doc.rect(0,18,5,192,'F');
       doc.setFontSize(11); doc.setFont('helvetica','bold');
       doc.setTextColor(...GP);
-      doc.text(`${currentProto}  ·  COLHEITA — PMG CORRIGIDO 14%`, 14, 12);
+      doc.text(`${currentProto}  ·  COLHEITA — DADOS E PRODUTIVIDADE`, 14, 12);
       doc.setFontSize(7); doc.setFont('helvetica','normal');
       doc.setTextColor(...GM); doc.text(dateStr, 248, 12);
 
-      // Para protocolo com repetição: uma tabela por repetição lado a lado
       if (comRep) {
         const colW2 = (297-28) / repList.length;
         repList.forEach((r, ri) => {
           const rows = tratamentos.map(t => {
             const cd = d.colheita?.[t]?.[r] || {};
-            const p=parseFloat(cd.peso), u=parseFloat(cd.umidade);
-            const corr = (!isNaN(p)&&!isNaN(u)&&u<100) ? (p*(100-u)/(100-14)).toFixed(2) : '—';
-            return [t, cd.peso8||'—', cd.peso||'—', cd.umidade||'—', corr];
+            const p8=parseFloat(cd.peso8), u=parseFloat(cd.umidade);
+            const p8corr = (!isNaN(p8)&&!isNaN(u)&&u<100) ? (p8*(100-u)/(100-14)).toFixed(2) : '—';
+            const pop = getPopulacao(currentProto, t);
+            const prod = (p8corr!=='—' && pop) ? ((parseFloat(p8corr)/8)*pop/60000).toFixed(2) : '—';
+            return [t, cd.peso8||'—', cd.umidade||'—', p8corr, prod];
           });
-          // Linha média corrigido
-          const corrVals = tratamentos.map(t => {
+          const prodVals = tratamentos.map(t => {
             const cd=d.colheita?.[t]?.[r]||{};
-            const p=parseFloat(cd.peso),u=parseFloat(cd.umidade);
-            return (!isNaN(p)&&!isNaN(u)&&u<100)?p*(100-u)/(100-14):null;
+            const p8=parseFloat(cd.peso8),u=parseFloat(cd.umidade);
+            const pop=getPopulacao(currentProto,t);
+            return (!isNaN(p8)&&!isNaN(u)&&u<100&&pop)?(p8*(100-u)/(100-14)/8)*pop/60000:null;
           }).filter(v=>v!==null);
-          const medCorr = corrVals.length>0?(corrVals.reduce((a,b)=>a+b,0)/corrVals.length).toFixed(2):'—';
-          rows.push(['MÉD','—','—','—', medCorr]);
+          const medProd = prodVals.length>0?(prodVals.reduce((a,b)=>a+b,0)/prodVals.length).toFixed(2):'—';
+          rows.push(['MÉD','—','—','—', medProd]);
 
           doc.autoTable({
-            head:[[r,'P8E\n(g)','PMG\n(g)','Umid\n(%)','PMG\nCorr.']],
+            head:[[r,'P8E\n(g)','Umid\n(%)','P8E Corr.\n(g)','Prod.\n(sc/ha)']],
             body: rows,
             startY: 24,
             startX: 14 + ri*colW2,
@@ -1226,7 +1398,6 @@ function generatePDF() {
                 hook.cell.styles.textColor=[216,243,220];
                 hook.cell.styles.fontStyle='bold';
               }
-              // Coluna PMG Corr destacada
               if(hook.column.index===4 && hook.row.index<rows.length-1){
                 hook.cell.styles.fillColor=[216,243,220];
                 hook.cell.styles.textColor=[29,106,74];
@@ -1235,20 +1406,52 @@ function generatePDF() {
             }
           });
         });
+
+        const afterColh = doc.lastAutoTable.finalY + 5;
+        if(afterColh < 180) {
+          const prodResHead = [['Tratamento','Pop. (pl/ha)','MED P8E Corr. (g)','Produtividade Media (sc/ha)']];
+          const prodResBody = tratamentos.map(t => {
+            const pop = getPopulacao(currentProto, t);
+            const pv = repList.map(r => {
+              const cd=d.colheita?.[t]?.[r]||{};
+              const p8=parseFloat(cd.peso8),u=parseFloat(cd.umidade);
+              return (!isNaN(p8)&&!isNaN(u)&&u<100)?p8*(100-u)/(100-14):null;
+            }).filter(v=>v!==null);
+            const medP8E = pv.length>0?pv.reduce((a,b)=>a+b,0)/pv.length:null;
+            const prod = (medP8E!==null&&pop)?(medP8E/8)*pop/60000:null;
+            return [t, pop?pop.toLocaleString('pt-BR'):'—', medP8E!==null?medP8E.toFixed(2):'—', prod!==null?prod.toFixed(2):'—'];
+          });
+          doc.autoTable({
+            head: prodResHead, body: prodResBody, startY: afterColh, theme:'grid',
+            headStyles:{ fillColor:[29,53,40], textColor:GP, fontStyle:'bold', halign:'center', fontSize:8 },
+            bodyStyles:{ halign:'center', fontSize:8 },
+            columnStyles:{ 0:{halign:'left',fontStyle:'bold',textColor:[29,106,74]}, 3:{fillColor:[216,243,220],textColor:[29,106,74],fontStyle:'bold'} },
+            alternateRowStyles:{ fillColor:[245,250,247] }, margin:{ left:30, right:30 },
+          });
+          const fY = doc.lastAutoTable.finalY + 3;
+          doc.setFontSize(6.5); doc.setTextColor(150);
+          doc.text('Formula: (P8E Corrigido 14% / 8) x Populacao (pl/ha) / 60.000  |  Correcao: P8E x (100 - Umidade) / (100 - 14)', 30, fY);
+        }
       } else {
-        const colhHead = [['Tratamento','Peso 8 Espigas (g)','PMG (g)','Umidade (%)','PMG Corrigido (g)']];
+        const colhHead = [['Tratamento','P8E (g)','PMG (g)','Umidade (%)','P8E Corr. (g)','PMG Corr. (g)','Pop. (pl/ha)','Prod. (sc/ha)']];
         const colhBody = tratamentos.map(t => {
           const cd=d.colheita?.[t]?.['R1']||{};
-          const p=parseFloat(cd.peso),u=parseFloat(cd.umidade);
-          const corr=(!isNaN(p)&&!isNaN(u)&&u<100)?(p*(100-u)/(100-14)).toFixed(2):'—';
-          return [t,cd.peso8||'—',cd.peso||'—',cd.umidade||'—',corr];
+          const p8=parseFloat(cd.peso8), pm=parseFloat(cd.peso), u=parseFloat(cd.umidade);
+          const p8corr = (!isNaN(p8)&&!isNaN(u)&&u<100)?(p8*(100-u)/(100-14)):null;
+          const pmcorr = (!isNaN(pm)&&!isNaN(u)&&u<100)?(pm*(100-u)/(100-14)).toFixed(2):'—';
+          const pop = getPopulacao(currentProto, t);
+          const prod = (p8corr!==null&&pop)?((p8corr/8)*pop/60000).toFixed(2):'—';
+          return [t, cd.peso8||'—', cd.peso||'—', cd.umidade||'—',
+            p8corr!==null?p8corr.toFixed(2):'—', pmcorr, pop?pop.toLocaleString('pt-BR'):'—', prod];
         });
         doc.autoTable({ head:colhHead, body:colhBody, startY:24, theme:'grid',
-          headStyles:{ fillColor:GD, textColor:GP, fontStyle:'bold', halign:'center', fontSize:9 },
-          bodyStyles:{ halign:'center', fontSize:9 },
-          columnStyles:{ 0:{ halign:'left', fontStyle:'bold', textColor:[29,106,74] },
-            4:{ fillColor:[216,243,220], textColor:[29,106,74], fontStyle:'bold' } },
-          alternateRowStyles:{ fillColor:[245,250,247] }, margin:{ left:40, right:40 } });
+          headStyles:{ fillColor:GD, textColor:GP, fontStyle:'bold', halign:'center', fontSize:8 },
+          bodyStyles:{ halign:'center', fontSize:8 },
+          columnStyles:{ 0:{halign:'left',fontStyle:'bold',textColor:[29,106,74]}, 7:{fillColor:[216,243,220],textColor:[29,106,74],fontStyle:'bold'} },
+          alternateRowStyles:{ fillColor:[245,250,247] }, margin:{ left:14, right:14 } });
+        const fY = doc.lastAutoTable.finalY + 3;
+        doc.setFontSize(6.5); doc.setTextColor(150);
+        doc.text('Formula: (P8E Corrigido 14% / 8) x Populacao (pl/ha) / 60.000', 14, fY);
       }
 
       // ══ PÁGINA: RANKING ══
@@ -1273,50 +1476,73 @@ function generatePDF() {
           return (!isNaN(p)&&!isNaN(u)&&u<100)?p*(100-u)/(100-14):null;
         }).filter(v=>v!==null);
         const mCorr = corrVals.length>0?corrVals.reduce((a,b)=>a+b,0)/corrVals.length:0;
-        return { t, mComp, mFil, mEsp, mCorr };
+
+        // Produtividade média (sc/ha)
+        const pop = getPopulacao(currentProto, t);
+        const prodVals = repList.map(r => {
+          const cd=d.colheita?.[t]?.[r]||{};
+          const p8=parseFloat(cd.peso8),u=parseFloat(cd.umidade);
+          return (!isNaN(p8)&&!isNaN(u)&&u<100&&pop)?(p8*(100-u)/(100-14)/8)*pop/60000:null;
+        }).filter(v=>v!==null);
+        const mProd = prodVals.length>0?prodVals.reduce((a,b)=>a+b,0)/prodVals.length:0;
+
+        return { t, mComp, mFil, mEsp, mCorr, mProd };
       });
 
       const maxComp=Math.max(...scores.map(s=>s.mComp))||1;
       const maxFil =Math.max(...scores.map(s=>s.mFil)) ||1;
       const maxEsp =Math.max(...scores.map(s=>s.mEsp)) ||1;
       const maxCorr=Math.max(...scores.map(s=>s.mCorr))||1;
+      const maxProd=Math.max(...scores.map(s=>s.mProd))||1;
+
+      // Se não houver dados de produtividade, usa 4 parâmetros; senão usa 5
+      const hasProd = scores.some(s=>s.mProd>0);
+      const nParams = hasProd ? 5 : 4;
 
       scores.forEach(s => {
         s.scoreComp=(s.mComp/maxComp)*100;
         s.scoreFil =(s.mFil/maxFil)*100;
         s.scoreEsp =(s.mEsp/maxEsp)*100;
         s.scoreCorr=(s.mCorr/maxCorr)*100;
-        s.total    =(s.scoreComp+s.scoreFil+s.scoreEsp+s.scoreCorr)/4;
+        s.scoreProd=hasProd?(s.mProd/maxProd)*100:0;
+        s.total    = hasProd
+          ? (s.scoreComp+s.scoreFil+s.scoreEsp+s.scoreCorr+s.scoreProd)/5
+          : (s.scoreComp+s.scoreFil+s.scoreEsp+s.scoreCorr)/4;
       });
       scores.sort((a,b)=>b.total-a.total);
 
       // ── TABELA DE RANKING ──
-      const rankHead = [[
-        '#', 'Tratamento',
-        'N° Fileiras', 'Comp. Espiga\n(cm)', 'Esp. Espiga\n(mm)',
-        'PMG Corr.\n14% (g)', 'Score\nGlobal (%)'
-      ]];
-      const rankBody = scores.map((s,i) => [
-        i===0?'1° *':i===1?'2°':i===2?'3°':`${i+1}°`,
-        s.t,
-        s.mFil>0  ? s.mFil.toFixed(2)  : '—',
-        s.mComp>0 ? s.mComp.toFixed(2) : '—',
-        s.mEsp>0  ? s.mEsp.toFixed(2)  : '—',
-        s.mCorr>0 ? s.mCorr.toFixed(2) : '—',
-        s.total.toFixed(1)+'%',
-      ]);
+      const rankCols = hasProd
+        ? ['Pos.', 'Tratamento', 'N° Fileiras', 'Comp. Espiga\n(cm)', 'Esp. Espiga\n(mm)', 'PMG Corr.\n14% (g)', 'Prod.\n(sc/ha)', 'Score\nGlobal (%)']
+        : ['Pos.', 'Tratamento', 'N° Fileiras', 'Comp. Espiga\n(cm)', 'Esp. Espiga\n(mm)', 'PMG Corr.\n14% (g)', 'Score\nGlobal (%)'];
+      const rankHead = [rankCols];
+
+      const scoreCol = hasProd ? 7 : 6;
+      const rankBody = scores.map((s,i) => {
+        const row = [
+          `${i+1}°`, s.t,
+          s.mFil>0  ? s.mFil.toFixed(2)  : '—',
+          s.mComp>0 ? s.mComp.toFixed(2) : '—',
+          s.mEsp>0  ? s.mEsp.toFixed(2)  : '—',
+          s.mCorr>0 ? s.mCorr.toFixed(2) : '—',
+        ];
+        if (hasProd) row.push(s.mProd>0 ? s.mProd.toFixed(2) : '—');
+        row.push(s.total.toFixed(1)+'%');
+        return row;
+      });
 
       doc.autoTable({
         head: rankHead,
         body: rankBody,
         startY: 24,
         theme: 'grid',
-        headStyles:{ fillColor:GD, textColor:GP, fontStyle:'bold', halign:'center', fontSize:8.5, cellPadding:3.5 },
+        headStyles:{ fillColor:GD, textColor:GP, fontStyle:'bold', halign:'center', fontSize:8, cellPadding:3.5 },
         bodyStyles:{ halign:'center', fontSize:8.5, cellPadding:3 },
         columnStyles:{
-          0:{ cellWidth:16, fontStyle:'bold', halign:'center' },
+          0:{ cellWidth:12, fontStyle:'bold', halign:'center' },
           1:{ halign:'left', fontStyle:'bold', cellWidth:20 },
-          6:{ fontStyle:'bold', textColor:[29,106,74] },
+          [scoreCol]:{ fontStyle:'bold', textColor:[29,106,74] },
+          ...(hasProd ? {6:{ fillColor:[216,243,220], textColor:[29,106,74], fontStyle:'bold' }} : {}),
         },
         alternateRowStyles:{ fillColor:[245,250,247] },
         margin:{ left:14, right:14 },
@@ -1326,7 +1552,7 @@ function generatePDF() {
           if(i===0){ hook.cell.styles.fillColor=[216,243,220]; hook.cell.styles.textColor=[29,53,40]; hook.cell.styles.fontStyle='bold'; hook.cell.styles.fontSize=9.5; }
           if(i===1){ hook.cell.styles.fillColor=[235,235,235]; hook.cell.styles.textColor=[40,40,40]; hook.cell.styles.fontStyle='bold'; }
           if(i===2){ hook.cell.styles.fillColor=[255,243,215]; hook.cell.styles.textColor=[100,60,10]; hook.cell.styles.fontStyle='bold'; }
-          if(i>2 && hook.column.index===6){ hook.cell.styles.textColor=[29,106,74]; hook.cell.styles.fontStyle='bold'; }
+          if(i>2 && hook.column.index===scoreCol){ hook.cell.styles.textColor=[29,106,74]; hook.cell.styles.fontStyle='bold'; }
         }
       });
 
@@ -1335,12 +1561,13 @@ function generatePDF() {
       const winner = scores[0];
 
       // Identifica em quais parâmetros o 1° se destacou
-      const paramNames = { fileiras:'N° Fileiras', comp:'Comprimento de Espiga', esp:'Espessura de Espiga', corr:'PMG Corrigido' };
+      const paramNames = { fileiras:'N° Fileiras', comp:'Comprimento de Espiga', esp:'Espessura de Espiga', corr:'PMG Corrigido', prod:'Produtividade' };
       const winnerScores = [
         { key:'fileiras', score:winner.scoreFil,  val:winner.mFil,  unit:'fileiras', max:maxFil  },
         { key:'comp',     score:winner.scoreComp, val:winner.mComp, unit:'cm',        max:maxComp },
         { key:'esp',      score:winner.scoreEsp,  val:winner.mEsp,  unit:'mm',        max:maxEsp  },
         { key:'corr',     score:winner.scoreCorr, val:winner.mCorr, unit:'g',         max:maxCorr },
+        ...(hasProd ? [{ key:'prod', score:winner.scoreProd, val:winner.mProd, unit:'sc/ha', max:maxProd }] : []),
       ];
 
       const best  = winnerScores.filter(p=>p.score>=99);  // melhor absoluto
@@ -1396,7 +1623,10 @@ function generatePDF() {
       if(noteY < 207){
         doc.setFontSize(6.5); doc.setFont('helvetica','normal');
         doc.setTextColor(150,150,150);
-        doc.text('* Score global = média normalizada (0–100%) de N° Fileiras, Comprimento, Espessura e PMG Corrigido em relação ao melhor valor observado entre os tratamentos.', 14, noteY);
+        const scoreNote = hasProd
+          ? '* Score global = media normalizada (0-100%) de N Fileiras, Comprimento, Espessura, PMG Corrigido e Produtividade (sc/ha) em relacao ao melhor valor observado.'
+          : '* Score global = media normalizada (0-100%) de N Fileiras, Comprimento, Espessura e PMG Corrigido. Produtividade nao incluida (dados de colheita nao preenchidos).';
+        doc.text(scoreNote, 14, noteY);
       }
 
       // Numeração
