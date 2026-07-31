@@ -319,11 +319,32 @@
     <!-- TOGGLE ESPIGAS VIÁVEIS -->
     <div style="margin-top:0.85rem;border-top:1px solid var(--border);padding-top:0.85rem">
       <div class="trat-rep-label" style="margin-bottom:0.5rem">A população já considera apenas espigas viáveis?</div>
-      <div style="display:flex;gap:0.5rem">
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
         <button class="trat-count-btn" id="btn-pop-nao" onclick="setPopViavel(false)">Não — aplicar fator 0,9</button>
         <button class="trat-count-btn" id="btn-pop-sim" onclick="setPopViavel(true)">Sim — usar população direta</button>
       </div>
       <div id="pop-viavel-info" style="font-size:0.68rem;color:var(--gray);margin-top:0.4rem">—</div>
+    </div>
+
+    <!-- SELEÇÃO DE FÓRMULA DE PRODUTIVIDADE -->
+    <div style="margin-top:0.85rem;border-top:1px solid var(--border);padding-top:0.85rem">
+      <div class="trat-rep-label" style="margin-bottom:0.5rem">Fórmula de cálculo de produtividade</div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+        <button class="trat-count-btn" id="btn-formula-espigas" onclick="setFormulaProd('espigas')">🌽 F1 — Peso 8 espigas</button>
+        <button class="trat-count-btn" id="btn-formula-area"    onclick="setFormulaProd('area')">📐 F2 — Área colhida</button>
+      </div>
+      <div id="formula-prod-info" style="font-size:0.68rem;color:var(--gray);margin-top:0.4rem">—</div>
+    </div>
+
+    <!-- ÁREA COLHIDA (só aparece quando F2 selecionada) -->
+    <div id="area-colhida-wrap" style="margin-top:0.85rem;border-top:1px solid var(--border);padding-top:0.85rem;display:none">
+      <div class="trat-rep-label" style="margin-bottom:0.4rem">Área colhida por parcela (m²)</div>
+      <input type="number" step="any" inputmode="decimal" id="area-colhida-input"
+        class="proto-input" style="width:100%;max-width:200px" placeholder="Ex: 15"
+        oninput="onAreaColhidaChange()">
+      <div style="font-size:0.65rem;color:var(--gray);margin-top:0.3rem">
+        Fórmula F2: (Peso corrigido (g) × 10.000 ÷ área (m²)) ÷ 60 = sc/ha
+      </div>
     </div>
 
     <div style="margin-top:0.75rem;background:var(--bg2);border-radius:6px;padding:0.6rem 0.85rem;font-size:0.7rem;color:var(--gray)" id="formula-display">
@@ -429,11 +450,22 @@
     <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.85rem;margin-bottom:1rem;color:var(--dark)">⚖️ Dados de Colheita</div>
 
     <div style="display:grid;gap:0.75rem">
-      <div>
-        <div class="trat-rep-label" style="margin-bottom:0.4rem">Peso de 8 Espigas (g)</div>
-        <input type="number" step="any" inputmode="decimal" id="colh-peso8"
-          class="proto-input" style="width:100%" placeholder="Ex: 1250.5"
-          oninput="onColheitaChange()">
+      <div id="colh-f1-fields">
+        <div>
+          <div class="trat-rep-label" style="margin-bottom:0.4rem">Peso de 8 Espigas (g)</div>
+          <input type="number" step="any" inputmode="decimal" id="colh-peso8"
+            class="proto-input" style="width:100%" placeholder="Ex: 1250.5"
+            oninput="onColheitaChange()">
+        </div>
+      </div>
+
+      <div id="colh-f2-fields" style="display:none">
+        <div>
+          <div class="trat-rep-label" style="margin-bottom:0.4rem">Peso total colhido (g)</div>
+          <input type="number" step="any" inputmode="decimal" id="colh-peso-total"
+            class="proto-input" style="width:100%" placeholder="Ex: 45000"
+            oninput="onColheitaChange()">
+        </div>
       </div>
       <div>
         <div class="trat-rep-label" style="margin-bottom:0.4rem">PMG (g)</div>
@@ -448,11 +480,11 @@
           oninput="onColheitaChange()">
       </div>
 
-      <!-- Peso 8 espigas corrigido -->
+      <!-- Peso corrigido -->
       <div style="background:var(--verde-pale);border:1.5px solid var(--verde-light);border-radius:8px;padding:1rem">
-        <div class="trat-rep-label" style="margin-bottom:0.25rem;color:var(--verde)">Peso 8 Espigas Corrigido 14% (g)</div>
+        <div class="trat-rep-label" style="margin-bottom:0.25rem;color:var(--verde)" id="colh-peso8-corr-label">Peso 8 Espigas Corrigido 14% (g)</div>
         <div id="colh-peso8-corr" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.2rem;color:var(--verde)">—</div>
-        <div style="font-size:0.65rem;color:var(--gray);margin-top:0.2rem">Fórmula: Peso 8 Esp. × (100 − Umidade) ÷ (100 − 14)</div>
+        <div style="font-size:0.65rem;color:var(--gray);margin-top:0.2rem" id="colh-peso8-corr-formula">Fórmula: Peso 8 Esp. × (100 − Umidade) ÷ (100 − 14)</div>
       </div>
 
       <!-- PMG corrigido -->
@@ -497,6 +529,81 @@ function getPopulacao(proto, trat) {
   if (custom !== undefined && custom !== null && custom !== '') return parseFloat(custom);
   // Fallback para tabela padrão dos PDFs
   return POPULACAO[proto]?.[trat] || null;
+}
+
+function getFormulaProd(proto) {
+  return allData[proto]?.config?.formulaProd || 'espigas';
+}
+
+function getAreaColhida(proto) {
+  const v = allData[proto]?.config?.areaColhida;
+  return v ? parseFloat(v) : null;
+}
+
+function setFormulaProd(val) {
+  document.getElementById('btn-formula-espigas').classList.toggle('active', val==='espigas');
+  document.getElementById('btn-formula-area').classList.toggle('active',    val==='area');
+  document.getElementById('area-colhida-wrap').style.display = val==='area' ? '' : 'none';
+  updateFormulaProdInfo();
+
+  const key = protoKey(currentProto);
+  firebase.set(firebase.ref(firebase.db, `protocolos/${key}/config/formulaProd`), val)
+    .then(() => {
+      if (!allData[currentProto]) allData[currentProto] = {};
+      if (!allData[currentProto].config) allData[currentProto].config = {};
+      allData[currentProto].config.formulaProd = val;
+      showToast('Fórmula salva ✓');
+    }).catch(() => showToast('⚠ Erro ao salvar'));
+}
+
+function updateFormulaProdInfo() {
+  const val  = getFormulaProd(currentProto);
+  const infoEl = document.getElementById('formula-prod-info');
+  if (!infoEl) return;
+  if (val === 'area') {
+    infoEl.textContent = 'F2: Produtividade = (Peso corrigido × 10.000 ÷ área colhida) ÷ 60 — resultado em sc/ha';
+  } else {
+    infoEl.textContent = 'F1: Produtividade baseada no peso das 8 espigas × população × metros lineares';
+  }
+}
+
+let areaSaveTimer;
+function onAreaColhidaChange() {
+  const val = document.getElementById('area-colhida-input').value;
+  clearTimeout(areaSaveTimer);
+  areaSaveTimer = setTimeout(() => {
+    const key = protoKey(currentProto);
+    firebase.set(firebase.ref(firebase.db, `protocolos/${key}/config/areaColhida`),
+      val !== '' ? parseFloat(val) : null)
+    .then(() => {
+      if (!allData[currentProto]) allData[currentProto] = {};
+      if (!allData[currentProto].config) allData[currentProto].config = {};
+      allData[currentProto].config.areaColhida = val !== '' ? parseFloat(val) : null;
+      showToast('Área salva ✓');
+    }).catch(() => showToast('⚠ Erro ao salvar'));
+  }, 1500);
+}
+
+function calcProdutividadeF2(pesoTotalCorr, proto) {
+  const area = getAreaColhida(proto);
+  if (!pesoTotalCorr || !area) return null;
+  return (pesoTotalCorr * 10000 / area) / 60;
+}
+
+function updateColheitaScreenFormula() {
+  const formula = getFormulaProd(currentProto);
+  const f1 = document.getElementById('colh-f1-fields');
+  const f2 = document.getElementById('colh-f2-fields');
+  const lbl = document.getElementById('colh-peso8-corr-label');
+  const frm = document.getElementById('colh-peso8-corr-formula');
+  if (f1) f1.style.display = formula === 'espigas' ? '' : 'none';
+  if (f2) f2.style.display = formula === 'area'    ? '' : 'none';
+  if (lbl) lbl.textContent = formula === 'area'
+    ? 'Peso Total Corrigido 14% (g)'
+    : 'Peso 8 Espigas Corrigido 14% (g)';
+  if (frm) frm.textContent = formula === 'area'
+    ? 'Fórmula: Peso Total × (100 − Umidade) ÷ (100 − 14)'
+    : 'Fórmula: Peso 8 Esp. × (100 − Umidade) ÷ (100 − 14)';
 }
 
 function getPopViavel(proto) {
@@ -618,6 +725,20 @@ function updatePopMediaLabel() {
 function renderPopScreen() {
   document.getElementById('pop-proto-name').textContent = currentProto || '—';
   if (!currentProto) return;
+
+  // Carrega seleção de fórmula
+  const formulaProd = getFormulaProd(currentProto);
+  const btnFEsp = document.getElementById('btn-formula-espigas');
+  const btnFArea = document.getElementById('btn-formula-area');
+  const areaWrap = document.getElementById('area-colhida-wrap');
+  if (btnFEsp && btnFArea) {
+    btnFEsp.classList.toggle('active', formulaProd === 'espigas');
+    btnFArea.classList.toggle('active', formulaProd === 'area');
+  }
+  if (areaWrap) areaWrap.style.display = formulaProd === 'area' ? '' : 'none';
+  const areaInput = document.getElementById('area-colhida-input');
+  if (areaInput) areaInput.value = getAreaColhida(currentProto) || '';
+  updateFormulaProdInfo();
 
   // Carrega toggle espigas viáveis
   const viavel = getPopViavel(currentProto);
@@ -884,15 +1005,31 @@ function loadProtocols() {
 // ══════════════════════════════════════════════
 function loadColheitaFields() {
   const d = allData[currentProto]?.colheita?.[currentTrat]?.[currentRep] || {};
-  const peso8   = d.peso8   ?? '';
-  const peso    = d.peso    ?? '';
-  const umidade = d.umidade ?? '';
-  document.getElementById('colh-peso8').value   = peso8;
+  const peso8      = d.peso8      ?? '';
+  const pesoTotal  = d.pesoTotal  ?? '';
+  const peso       = d.peso       ?? '';
+  const umidade    = d.umidade    ?? '';
+
+  const p8El = document.getElementById('colh-peso8');
+  const ptEl = document.getElementById('colh-peso-total');
+  if (p8El) p8El.value = peso8;
+  if (ptEl) ptEl.value = pesoTotal;
   document.getElementById('colh-peso').value    = peso;
   document.getElementById('colh-umidade').value = umidade;
-  calcCorrigido(peso, umidade);
-  const peso8Corr = calcPeso8Corrigido(peso8, umidade);
-  calcProdutividade(peso8Corr);
+
+  updateColheitaScreenFormula();
+
+  const formula = getFormulaProd(currentProto);
+  if (formula === 'area') {
+    const ptCorr = pesoTotal !== '' && umidade !== ''
+      ? parseFloat(pesoTotal) * (100 - parseFloat(umidade)) / (100 - 14) : null;
+    calcPeso8Corrigido(ptEl?.value, umidade); // reutiliza display
+    calcProdutividade(ptCorr);
+  } else {
+    calcCorrigido(peso, umidade);
+    const p8corr = calcPeso8Corrigido(peso8, umidade);
+    calcProdutividade(p8corr);
+  }
   document.getElementById('syncStatusColh').textContent = 'Sincronizado ✓';
 }
 
@@ -926,36 +1063,61 @@ function calcPeso8Corrigido(peso8, umidade) {
   }
 }
 
-function calcProdutividade(peso8Corr) {
-  const el  = document.getElementById('colh-produtividade');
-  const inf = document.getElementById('colh-pop-info');
-  const mL     = getMetrosLineares(currentProto);
-  const popMed = getPopMedia(currentProto);
+function calcProdutividade(pesoCorr) {
+  const el      = document.getElementById('colh-produtividade');
+  const inf     = document.getElementById('colh-pop-info');
+  const formula = getFormulaProd(currentProto);
 
-  if (peso8Corr !== null && mL && popMed) {
-    const prod = calcProdutividadeNova(peso8Corr, currentProto);
-    const plantasPorMetro = (popMed * 0.9) / mL;
-    el.textContent = prod !== null ? prod.toFixed(2) + ' sc/ha' : '—';
-    inf.textContent = `Pop. média: ${Math.round(popMed).toLocaleString('pt-BR')} pl/ha · ${plantasPorMetro.toFixed(2)} pl/m · ${Math.round(mL).toLocaleString('pt-BR')} m/ha`;
+  if (formula === 'area') {
+    const area = getAreaColhida(currentProto);
+    if (pesoCorr !== null && area) {
+      const prod = calcProdutividadeF2(pesoCorr, currentProto);
+      el.textContent = prod !== null ? prod.toFixed(2) + ' sc/ha' : '—';
+      inf.textContent = `Área colhida: ${area} m² · F2: (Peso corr. × 10.000 ÷ área) ÷ 60`;
+    } else {
+      el.textContent = '—';
+      const missing = [];
+      if (!area) missing.push('área colhida');
+      if (!pesoCorr) missing.push('peso total corrigido');
+      inf.textContent = `Faltando: ${missing.join(', ')}`;
+    }
   } else {
-    el.textContent = '—';
-    const missing = [];
-    if (!mL) missing.push('espaçamento');
-    if (!popMed) missing.push('população');
-    if (!peso8Corr) missing.push('P8E corrigido');
-    inf.textContent = `Faltando: ${missing.join(', ')}`;
+    const mL     = getMetrosLineares(currentProto);
+    const popMed = getPopMedia(currentProto);
+    if (pesoCorr !== null && mL && popMed) {
+      const prod = calcProdutividadeNova(pesoCorr, currentProto);
+      const fator = getFatorViavel(currentProto);
+      const plm = (popMed * fator) / mL;
+      el.textContent = prod !== null ? prod.toFixed(2) + ' sc/ha' : '—';
+      inf.textContent = `Pop. média: ${Math.round(popMed).toLocaleString('pt-BR')} pl/ha · ${plm.toFixed(2)} pl/m · ${Math.round(mL).toLocaleString('pt-BR')} m/ha`;
+    } else {
+      el.textContent = '—';
+      const missing = [];
+      if (!mL) missing.push('espaçamento');
+      if (!popMed) missing.push('população');
+      if (!pesoCorr) missing.push('P8E corrigido');
+      inf.textContent = `Faltando: ${missing.join(', ')}`;
+    }
   }
 }
 
 let colhSaveTimer;
 function onColheitaChange() {
-  const peso8   = document.getElementById('colh-peso8').value;
-  const peso    = document.getElementById('colh-peso').value;
-  const umidade = document.getElementById('colh-umidade').value;
+  const formula    = getFormulaProd(currentProto);
+  const peso8      = document.getElementById('colh-peso8')?.value || '';
+  const pesoTotal  = document.getElementById('colh-peso-total')?.value || '';
+  const peso       = document.getElementById('colh-peso').value;
+  const umidade    = document.getElementById('colh-umidade').value;
 
   calcCorrigido(peso, umidade);
-  const peso8Corr = calcPeso8Corrigido(peso8, umidade);
-  calcProdutividade(peso8Corr);
+
+  let pesoParaProd = null;
+  if (formula === 'area') {
+    pesoParaProd = calcPeso8Corrigido(pesoTotal, umidade);
+  } else {
+    pesoParaProd = calcPeso8Corrigido(peso8, umidade);
+  }
+  calcProdutividade(pesoParaProd);
 
   document.getElementById('syncStatusColh').textContent = 'Salvando...';
 
@@ -968,12 +1130,12 @@ function onColheitaChange() {
     const key = protoKey(savedProto);
     firebase.set(
       firebase.ref(firebase.db, `protocolos/${key}/colheita/${savedTrat}/${savedRep}`),
-      { peso8, peso, umidade }
+      { peso8, pesoTotal, peso, umidade }
     ).then(() => {
       if (!allData[savedProto]) allData[savedProto] = {};
       if (!allData[savedProto].colheita) allData[savedProto].colheita = {};
       if (!allData[savedProto].colheita[savedTrat]) allData[savedProto].colheita[savedTrat] = {};
-      allData[savedProto].colheita[savedTrat][savedRep] = { peso8, peso, umidade };
+      allData[savedProto].colheita[savedTrat][savedRep] = { peso8, pesoTotal, peso, umidade };
       document.getElementById('syncStatusColh').textContent = 'Sincronizado ✓';
       updateModeScreenPct();
       showToast('Salvo ✓');
