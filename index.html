@@ -343,7 +343,7 @@
         class="proto-input" style="width:100%;max-width:200px" placeholder="Ex: 15"
         oninput="onAreaColhidaChange()">
       <div style="font-size:0.65rem;color:var(--gray);margin-top:0.3rem">
-        Fórmula F2: (Peso corrigido (g) × 10.000 ÷ área (m²)) ÷ 60 = sc/ha
+        Fórmula F2: (Peso corrigido (g) × 10.000 ÷ área (m²)) ÷ 60.000 = sc/ha
       </div>
     </div>
 
@@ -499,7 +499,7 @@
         <div class="trat-rep-label" style="margin-bottom:0.25rem;color:var(--verde-light)">Produtividade Estimada (sc/ha)</div>
         <div id="colh-produtividade" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.4rem;color:var(--verde-pale)">—</div>
         <div id="colh-pop-info" style="font-size:0.65rem;color:#9ca3af;margin-top:0.2rem">—</div>
-        <div style="font-size:0.65rem;color:#6b7280;margin-top:0.15rem">Fórmula: (P8E_corr ÷ (8 ÷ (Pop_média × 0,9 ÷ mL))) × mL ÷ 60.000</div>
+        <div style="font-size:0.65rem;color:#6b7280;margin-top:0.15rem" id="colh-prod-formula">Fórmula: (P8E_corr ÷ (8 ÷ (Pop_média × 0,9 ÷ mL))) × mL ÷ 60.000</div>
       </div>
     </div>
   </div>
@@ -561,7 +561,7 @@ function updateFormulaProdInfo() {
   const infoEl = document.getElementById('formula-prod-info');
   if (!infoEl) return;
   if (val === 'area') {
-    infoEl.textContent = 'F2: Produtividade = (Peso corrigido × 10.000 ÷ área colhida) ÷ 60 — resultado em sc/ha';
+    infoEl.textContent = 'F2: Produtividade = (Peso corrigido × 10.000 ÷ área colhida) ÷ 60.000 — resultado em sc/ha';
   } else {
     infoEl.textContent = 'F1: Produtividade baseada no peso das 8 espigas × população × metros lineares';
   }
@@ -587,23 +587,29 @@ function onAreaColhidaChange() {
 function calcProdutividadeF2(pesoTotalCorr, proto) {
   const area = getAreaColhida(proto);
   if (!pesoTotalCorr || !area) return null;
-  return (pesoTotalCorr * 10000 / area) / 60;
+  return (pesoTotalCorr * 10000 / area) / 60000;
 }
 
 function updateColheitaScreenFormula() {
   const formula = getFormulaProd(currentProto);
-  const f1 = document.getElementById('colh-f1-fields');
-  const f2 = document.getElementById('colh-f2-fields');
+  const f1  = document.getElementById('colh-f1-fields');
+  const f2  = document.getElementById('colh-f2-fields');
   const lbl = document.getElementById('colh-peso8-corr-label');
   const frm = document.getElementById('colh-peso8-corr-formula');
+  const pf  = document.getElementById('colh-prod-formula');
+
   if (f1) f1.style.display = formula === 'espigas' ? '' : 'none';
   if (f2) f2.style.display = formula === 'area'    ? '' : 'none';
-  if (lbl) lbl.textContent = formula === 'area'
-    ? 'Peso Total Corrigido 14% (g)'
-    : 'Peso 8 Espigas Corrigido 14% (g)';
-  if (frm) frm.textContent = formula === 'area'
-    ? 'Fórmula: Peso Total × (100 − Umidade) ÷ (100 − 14)'
-    : 'Fórmula: Peso 8 Esp. × (100 − Umidade) ÷ (100 − 14)';
+
+  if (formula === 'area') {
+    if (lbl) lbl.textContent = 'Peso Total Corrigido 14% (g)';
+    if (frm) frm.textContent = 'Fórmula: Peso Total × (100 − Umidade) ÷ (100 − 14)';
+    if (pf)  pf.textContent  = 'Fórmula F2: (Peso Total Corrigido × 10.000 ÷ Área colhida) ÷ 60.000 = sc/ha';
+  } else {
+    if (lbl) lbl.textContent = 'Peso 8 Espigas Corrigido 14% (g)';
+    if (frm) frm.textContent = 'Fórmula: Peso 8 Esp. × (100 − Umidade) ÷ (100 − 14)';
+    if (pf)  pf.textContent  = 'Fórmula F1: (P8E_corr ÷ (8 ÷ (Pop_média × 0,9 ÷ mL))) × mL ÷ 60.000';
+  }
 }
 
 function getPopViavel(proto) {
@@ -1073,7 +1079,7 @@ function calcProdutividade(pesoCorr) {
     if (pesoCorr !== null && area) {
       const prod = calcProdutividadeF2(pesoCorr, currentProto);
       el.textContent = prod !== null ? prod.toFixed(2) + ' sc/ha' : '—';
-      inf.textContent = `Área colhida: ${area} m² · F2: (Peso corr. × 10.000 ÷ área) ÷ 60`;
+      inf.textContent = `Área colhida: ${area} m² · F2: (Peso corr. × 10.000 ÷ área) ÷ 60.000`;
     } else {
       el.textContent = '—';
       const missing = [];
