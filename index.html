@@ -1524,11 +1524,19 @@ function generatePDF() {
       const d = allData[currentProto]||{};
       const tratamentos = getTratamentos();
       // Helper produtividade nova fórmula
-      const mLpdf   = getMetrosLineares(currentProto);
+      const mLpdf     = getMetrosLineares(currentProto);
       const popMedpdf = getPopMedia(currentProto);
+      const formulaPDF = getFormulaProd(currentProto);
+      const areaColhidaPDF = getAreaColhida(currentProto);
+      const fatorViavelPDF = getFatorViavel(currentProto);
+
       function prodNovaPDF(p8eCorr) {
+        if (formulaPDF === 'area') {
+          if (!p8eCorr || !areaColhidaPDF) return null;
+          return (p8eCorr * 10000 / areaColhidaPDF) / 60000;
+        }
         if (!p8eCorr || !mLpdf || !popMedpdf) return null;
-        const plm = (popMedpdf * 0.9) / mLpdf;
+        const plm = (popMedpdf * fatorViavelPDF) / mLpdf;
         const mpe = 8 / plm;
         return (p8eCorr / mpe) * mLpdf / 60000;
       }
@@ -1832,11 +1840,13 @@ function generatePDF() {
         repList.forEach((r, ri) => {
           const rows = tratamentos.map(t => {
             const cd = d.colheita?.[t]?.[r] || {};
-            const p8=parseFloat(cd.peso8), u=parseFloat(cd.umidade);
-            const p8corr = (!isNaN(p8)&&!isNaN(u)&&u<100) ? (p8*(100-u)/(100-14)).toFixed(2) : '—';
-            const pop = getPopulacao(currentProto, t);
-            const p8cNum = p8corr!=='—' ? parseFloat(p8corr) : null; const prod = p8cNum ? (prodNovaPDF(p8cNum)||0).toFixed(2) : '—';
-            return [t, cd.peso8||'—', cd.umidade||'—', p8corr, prod];
+            const u=parseFloat(cd.umidade);
+            const rawPeso = formulaPDF==='area' ? parseFloat(cd.pesoTotal) : parseFloat(cd.peso8);
+            const rawLabel = formulaPDF==='area' ? (cd.pesoTotal||'—') : (cd.peso8||'—');
+            const pesoCorr = (!isNaN(rawPeso)&&!isNaN(u)&&u<100) ? (rawPeso*(100-u)/(100-14)).toFixed(2) : '—';
+            const pesoCorrNum = pesoCorr!=='—' ? parseFloat(pesoCorr) : null;
+            const prod = pesoCorrNum ? (prodNovaPDF(pesoCorrNum)||0).toFixed(2) : '—';
+            return [t, rawLabel, cd.umidade||'—', pesoCorr, prod];
           });
           const prodVals = tratamentos.map(t => {
             const cd=d.colheita?.[t]?.[r]||{};
@@ -1882,8 +1892,9 @@ function generatePDF() {
             const pop = getPopulacao(currentProto, t);
             const pv = repList.map(r => {
               const cd=d.colheita?.[t]?.[r]||{};
-              const p8=parseFloat(cd.peso8),u=parseFloat(cd.umidade);
-              return (!isNaN(p8)&&!isNaN(u)&&u<100)?p8*(100-u)/(100-14):null;
+              const u=parseFloat(cd.umidade);
+              const rp = formulaPDF==='area' ? parseFloat(cd.pesoTotal) : parseFloat(cd.peso8);
+              return (!isNaN(rp)&&!isNaN(u)&&u<100)?rp*(100-u)/(100-14):null;
             }).filter(v=>v!==null);
             const medP8E = pv.length>0?pv.reduce((a,b)=>a+b,0)/pv.length:null;
             const prod = medP8E!==null ? prodNovaPDF(medP8E) : null;
@@ -1921,7 +1932,9 @@ function generatePDF() {
           const p8corr = (!isNaN(p8)&&!isNaN(u)&&u<100)?(p8*(100-u)/(100-14)):null;
           const pmcorr = (!isNaN(pm)&&!isNaN(u)&&u<100)?(pm*(100-u)/(100-14)).toFixed(2):'—';
           const pop = getPopulacao(currentProto, t);
-          const prod = p8corr!==null ? (prodNovaPDF(p8corr)||0).toFixed(2) : '—';
+          const rawPesoNR = formulaPDF==='area' ? parseFloat(cd.pesoTotal) : parseFloat(cd.peso8);
+        const corrNR = (!isNaN(rawPesoNR)&&!isNaN(u)&&u<100) ? rawPesoNR*(100-u)/(100-14) : null;
+        const prod = corrNR!==null ? (prodNovaPDF(corrNR)||0).toFixed(2) : '—';
           return [t, cd.peso8||'—', cd.peso||'—', cd.umidade||'—',
             p8corr!==null?p8corr.toFixed(2):'—', pmcorr, pop?pop.toLocaleString('pt-BR'):'—', prod];
         });
@@ -1962,8 +1975,9 @@ function generatePDF() {
         const pop = getPopulacao(currentProto, t);
         const prodVals = repList.map(r => {
           const cd=d.colheita?.[t]?.[r]||{};
-          const p8=parseFloat(cd.peso8),u=parseFloat(cd.umidade);
-          const p8c=(!isNaN(p8)&&!isNaN(u)&&u<100)?p8*(100-u)/(100-14):null; return p8c?prodNovaPDF(p8c):null;
+          const u=parseFloat(cd.umidade);
+          const rp = formulaPDF==='area' ? parseFloat(cd.pesoTotal) : parseFloat(cd.peso8);
+          const pc=(!isNaN(rp)&&!isNaN(u)&&u<100)?rp*(100-u)/(100-14):null; return pc?prodNovaPDF(pc):null;
         }).filter(v=>v!==null);
         const mProd = prodVals.length>0?prodVals.reduce((a,b)=>a+b,0)/prodVals.length:0;
 
